@@ -26,6 +26,7 @@ JSON만 출력: {"variables": ["...", "..."]}''';
 
   final raw = await llm.chatStream(
     [LlmMessage(role: 'user', content: prompt)],
+    task: 'scenario',
     temperature: 1.0,
     maxOutputTokens: 256,
   ).join();
@@ -162,6 +163,7 @@ $log
 
   final raw = await llm.chatStream(
     [LlmMessage(role: 'user', content: prompt)],
+    task: 'final_judge',
     temperature: 0.2,
     maxOutputTokens: 1024,
   ).join();

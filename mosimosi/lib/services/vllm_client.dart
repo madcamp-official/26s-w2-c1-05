@@ -6,6 +6,7 @@ class VllmClient implements LlmClient {
   @override
   Stream<String> chatStream(
     List<LlmMessage> messages, {
+    String task = 'boss_turn',
     double? temperature,
     int? maxOutputTokens,
   }) =>
