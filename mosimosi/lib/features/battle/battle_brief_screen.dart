@@ -3,17 +3,66 @@ import 'package:go_router/go_router.dart';
 
 import '../../ui/theme.dart';
 import '../../ui/components.dart';
+import 'battle_room.dart';
 
 /// 3.2 배틀 브리핑 (비공개) — 디자인 H 섹션 이식.
-/// 공통 상황 + 비밀 구분선 + 비밀 목표(SECRET) + 규칙 카드(RULE).
-/// 비주얼 목: 실제로는 서버가 각자 몫만 전송(규칙 #2).
-class BattleBriefScreen extends StatelessWidget {
+/// 공통 상황 + 비밀 구분선 + 비밀 목표(SECRET) + 규칙 카드(RULE·상담원만).
+/// 실배선: 서버가 준 자기 몫만 표시(규칙 #2), 준비완료→ready, 양측 완료→통화.
+class BattleBriefScreen extends StatefulWidget {
   const BattleBriefScreen({super.key, required this.roomId});
 
   final String roomId;
 
   @override
+  State<BattleBriefScreen> createState() => _BattleBriefScreenState();
+}
+
+class _BattleBriefScreenState extends State<BattleBriefScreen> {
+  BattleRoomController? _room;
+  bool _navigated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _room = BattleRoomController.of(widget.roomId);
+    _room?.addListener(_onRoom);
+  }
+
+  void _onRoom() {
+    final room = _room!;
+    if (room.inCall && !_navigated) {
+      _navigated = true; // 양측 ready → 서버 in_call → 통화 화면
+      if (mounted) context.go('/battle/${widget.roomId}/call');
+    } else if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _room?.removeListener(_onRoom);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final room = _room;
+    if (room == null) {
+      // 딥링크/재시작 등으로 방 컨텍스트 소실 — 재매칭 안내.
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('배틀 세션이 만료됐어요', style: TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
+              const SizedBox(height: YbsSpace.s4),
+              YbsButton(label: '다시 매칭하기', onTap: () => context.go('/battle')),
+            ],
+          ),
+        ),
+      );
+    }
+    final match = room.match;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -36,7 +85,7 @@ class BattleBriefScreen extends StatelessWidget {
                           border: Border.all(color: YbsColor.amber400.withValues(alpha: 0.5)),
                           borderRadius: BorderRadius.circular(YbsRadius.full),
                         ),
-                        child: const Text('시작까지 00:12',
+                        child: Text('양쪽 준비되면 시작',
                             style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.amber400)),
                       ),
                     ],
@@ -56,13 +105,16 @@ class BattleBriefScreen extends StatelessWidget {
                         Text('공통 상황 · 양쪽 모두 확인',
                             style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro) / 2, color: YbsColor.textFaint)),
                         const SizedBox(height: YbsSpace.s2 + 2),
-                        const Text('온라인 쇼핑몰 「급배송」 환불 분쟁. 민원인이 3주째 환불을 요구하고 있습니다.',
-                            style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
+                        Text(match.situation,
+                            style: const TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
                         const SizedBox(height: YbsSpace.s2 + 2),
                         Row(children: [
-                          _rolePill('나 · 상담원', YbsColor.go300, YbsColor.go600, YbsColor.go500.withValues(alpha: 0.10)),
+                          _rolePill('나 · ${match.roleLabel}', YbsColor.go300, YbsColor.go600, YbsColor.go500.withValues(alpha: 0.10)),
                           const SizedBox(width: YbsSpace.s2 + 2),
-                          _rolePill('환불전사_수원 · 민원인', YbsColor.live400, YbsColor.live600, YbsColor.live500.withValues(alpha: 0.10)),
+                          Flexible(
+                            child: _rolePill('${match.opponentNickname} · ${match.opponentRoleLabel}',
+                                YbsColor.live400, YbsColor.live600, YbsColor.live500.withValues(alpha: 0.10)),
+                          ),
                         ]),
                       ],
                     ),
@@ -94,43 +146,33 @@ class BattleBriefScreen extends StatelessWidget {
                     border: YbsColor.go600,
                     bg: YbsColor.go500.withValues(alpha: 0.06),
                     glow: YbsColor.go500.withValues(alpha: 0.10),
-                    body: const Text.rich(
-                      TextSpan(children: [
-                        TextSpan(text: '환불 없이 '),
-                        TextSpan(text: '만족도 3점 이상', style: TextStyle(color: YbsColor.go300)),
-                        TextSpan(text: '으로 통화를 종료하세요.'),
-                      ]),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero),
-                    ),
-                    note: '달성 시 기세 보너스 +20',
+                    body: Text(match.secretGoal,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
+                    note: '달성 시 판정에 크게 반영돼요',
                   ),
-                  const SizedBox(height: YbsSpace.s4 - 2),
-                  _secretCard(
-                    header: '규칙 카드 · 상담원 전용',
-                    tag: 'RULE',
-                    accent: YbsColor.live400,
-                    border: YbsColor.borderIncall,
-                    bg: YbsColor.live500.withValues(alpha: 0.05),
-                    glow: null,
-                    body: const Text.rich(
-                      TextSpan(children: [
-                        TextSpan(text: '고객이 '),
-                        TextSpan(text: '소비자원 신고', style: TextStyle(color: YbsColor.live400)),
-                        TextSpan(text: '를 언급하면 접수 의무가 발생합니다.'),
-                      ]),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero),
+                  if (match.ruleCard != null) ...[
+                    const SizedBox(height: YbsSpace.s4 - 2),
+                    _secretCard(
+                      header: '규칙 카드 · ${match.roleLabel} 전용',
+                      tag: 'RULE',
+                      accent: YbsColor.live400,
+                      border: YbsColor.borderIncall,
+                      bg: YbsColor.live500.withValues(alpha: 0.05),
+                      glow: null,
+                      body: Text(match.ruleCard!,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
+                      note: '규칙 위반은 판정에서 불리하게 반영돼요',
                     ),
-                    note: '접수를 미루면 기세가 계속 깎여요',
-                  ),
+                  ],
                   const Spacer(),
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 360),
                       child: YbsButton(
-                        label: '준비 완료',
+                        label: room.readySent ? '상대를 기다리는 중…' : '준비 완료',
                         size: YbsButtonSize.lg,
                         fullWidth: true,
-                        onTap: () => context.go('/battle/$roomId/call'),
+                        onTap: room.readySent ? null : room.sendReady,
                       ),
                     ),
                   ),
@@ -140,7 +182,8 @@ class BattleBriefScreen extends StatelessWidget {
                     children: [
                       Container(width: 6, height: 6, decoration: const BoxDecoration(color: YbsColor.amber400, shape: BoxShape.circle)),
                       const SizedBox(width: YbsSpace.s2),
-                      const Text('상대 준비 중…', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+                      Text(room.readySent ? '상대가 준비하면 바로 시작돼요' : '준비 완료를 누르면 상대에게 알려요',
+                          style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
                     ],
                   ),
                   const SizedBox(height: 30),
@@ -156,7 +199,10 @@ class BattleBriefScreen extends StatelessWidget {
   Widget _rolePill(String label, Color fg, Color border, Color bg) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(color: bg, border: Border.all(color: border), borderRadius: BorderRadius.circular(YbsRadius.full)),
-        child: Text(label, style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: fg)),
+        child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: fg)),
       );
 
   Widget _secretCard({

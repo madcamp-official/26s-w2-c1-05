@@ -1,14 +1,22 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../../core/local_store.dart';
+import '../../platform/tts_factory.dart';
+import '../../services/game_server_client.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
+import 'battle_room.dart';
 
 /// 3.1 배틀 매칭 — 디자인 G 섹션 이식.
 /// 탐색 중(경과 타이머) → 매칭 완료(VS·역할 배정) → 30초 폴백(AI 배틀 시트).
-/// 비주얼 목: 실제 매칭 큐(WebSocket)는 P1. 데모용 8초 후 성사.
+/// 실배선: /ws/match 큐 진입, matched 이벤트로 방 컨트롤러 생성(Phase 3).
+/// 30초 폴백은 클라 타이머(서버는 큐 이탈만) — AI 배틀 자체는 서버 미구현.
 class BattleMatchingScreen extends StatefulWidget {
   const BattleMatchingScreen({super.key});
 
@@ -22,6 +30,11 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
   _State _state = _State.searching;
   int _elapsed = 0;
   Timer? _timer;
+  WebSocketChannel? _matchSocket;
+  BattleMatch? _match; // matched 이벤트 수신분 (내 몫 브리핑)
+  String? _error;
+
+  String get _myNickname => LocalStore.instance.nickname ?? '나';
 
   @override
   void initState() {
@@ -30,15 +43,61 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
       if (!mounted) return;
       setState(() {
         _elapsed++;
-        if (_state == _State.searching && _elapsed == 8) _state = _State.matched; // 목 성사
         if (_state == _State.searching && _elapsed >= 30) _state = _State.fallback;
       });
     });
+    _enterQueue();
+  }
+
+  void _enterQueue() {
+    final userId = LocalStore.instance.userId;
+    if (userId == null) {
+      setState(() => _error = '계정이 없어요 — 온보딩을 먼저 진행해 주세요.');
+      return;
+    }
+    final socket = GameServerClient().connectMatchSocket(
+      userId: userId,
+      nickname: _myNickname,
+      formFactor:
+          defaultTargetPlatform == TargetPlatform.android ? 'android' : 'windows',
+    );
+    _matchSocket = socket;
+    socket.stream.listen(
+      (raw) {
+        final msg = jsonDecode(raw as String) as Map<String, dynamic>;
+        if (msg['type'] != 'matched' || !mounted) return;
+        final match = BattleMatch.fromJson(msg);
+        // 방 컨트롤러 생성 + 방 소켓 즉시 연결 (ready는 브리핑에서 전송).
+        final controller = BattleRoomController(
+          match: match,
+          myUserId: userId,
+          tts: createTtsEngine(),
+        );
+        BattleRoomController.register(controller);
+        controller.connect();
+        socket.sink.close(); // 매칭 소켓 역할 종료 — 이후는 /ws/room
+        setState(() {
+          _match = match;
+          _state = _State.matched;
+        });
+      },
+      onError: (_) {
+        if (mounted) setState(() => _error = '매칭 서버에 연결할 수 없어요.');
+      },
+      onDone: () {
+        // 매칭 전 서버가 끊은 경우만 오류 (성사 후 close는 정상 흐름).
+        if (mounted && _state == _State.searching && _error == null) {
+          setState(() => _error = '매칭 서버와 연결이 끊겼어요.');
+        }
+      },
+      cancelOnError: false,
+    );
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _matchSocket?.sink.close(); // 큐 이탈 (서버가 disconnect로 제거)
     super.dispose();
   }
 
@@ -49,11 +108,26 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: switch (_state) {
-          _State.searching => _searching(),
-          _State.matched => _matched(),
-          _State.fallback => _fallback(),
-        },
+        child: _error != null
+            ? _errorBody()
+            : switch (_state) {
+                _State.searching => _searching(),
+                _State.matched => _matched(),
+                _State.fallback => _fallback(),
+              },
+      ),
+    );
+  }
+
+  Widget _errorBody() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_error!, style: const TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
+          const SizedBox(height: YbsSpace.s5),
+          YbsButton(label: '홈으로', variant: YbsButtonVariant.ghost, onTap: () => context.go('/home')),
+        ],
       ),
     );
   }
@@ -88,7 +162,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
               style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 32, fontWeight: FontWeight.w600, height: 1.1, color: YbsColor.go400)),
           if (!dimmed) ...[
             const SizedBox(height: YbsSpace.s2),
-            const Text('비슷한 레벨의 상대를 찾고 있어요.\n평균 대기 20초',
+            const Text('상대가 매칭을 누르면 바로 연결돼요.\n같은 서버의 다른 기기에서 접속해 보세요',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textSub)),
             const SizedBox(height: YbsSpace.s5),
@@ -104,8 +178,8 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
 
   // ---- 매칭 완료 ----
   Widget _matched() {
+    final match = _match!;
     Widget player({
-      required String syllable,
       required String name,
       required String role,
       required bool isMe,
@@ -131,11 +205,14 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
               boxShadow: [BoxShadow(color: glow, blurRadius: 26)],
             ),
             alignment: Alignment.center,
-            child: Text(syllable,
+            child: Text(name.characters.first,
                 style: TextStyle(fontFamily: YbsType.display, fontSize: 34, height: 1, color: accent)),
           ),
           const SizedBox(height: YbsSpace.s2 + 2),
-          Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+          Text(name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
           const SizedBox(height: YbsSpace.s2 + 2),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -150,6 +227,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
       );
     }
 
+    final oppOnWindows = match.opponentFormFactor == 'windows';
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s6),
@@ -162,13 +240,13 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                player(syllable: '민', name: '민준', role: '상담원', isMe: true),
+                player(name: _myNickname, role: match.roleLabel, isMe: true),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: YbsSpace.s4 + 2),
                   child: Text('VS',
                       style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live500)),
                 ),
-                player(syllable: '환', name: '환불전사_수원', role: '민원인', isMe: false),
+                player(name: match.opponentNickname, role: match.opponentRoleLabel, isMe: false),
               ],
             ),
             const SizedBox(height: 28),
@@ -181,30 +259,24 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.desktop_windows_outlined, size: 14, color: YbsColor.sky400),
-                  SizedBox(width: YbsSpace.s2),
-                  Text('상대는 Windows에서 접속 중', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+                children: [
+                  Icon(oppOnWindows ? Icons.desktop_windows_outlined : Icons.smartphone,
+                      size: 14, color: YbsColor.sky400),
+                  const SizedBox(width: YbsSpace.s2),
+                  Text('상대는 ${oppOnWindows ? 'Windows' : 'Android'}에서 접속 중',
+                      style: const TextStyle(fontSize: 13, color: YbsColor.textSub)),
                 ],
               ),
             ),
-            const SizedBox(height: YbsSpace.s2),
-            const Text('시즌 승률이 비슷한 상대예요 (12승 vs 11승)',
-                style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
             const SizedBox(height: 28),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 300),
-              child: Column(children: [
-                YbsButton(
-                  label: '준비 완료',
-                  size: YbsButtonSize.lg,
-                  fullWidth: true,
-                  onTap: () => context.go('/battle/demo/brief'),
-                ),
-                const SizedBox(height: YbsSpace.s2 + 2),
-                const Text('5초 후 자동 시작',
-                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, color: YbsColor.textFaint)),
-              ]),
+              child: YbsButton(
+                label: '브리핑 확인하기',
+                size: YbsButtonSize.lg,
+                fullWidth: true,
+                onTap: () => context.go('/battle/${match.roomId}/brief'),
+              ),
             ),
           ],
         ),
@@ -243,20 +315,16 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
                 const Text('상대가 없어요',
                     style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1.2, color: YbsColor.textHero)),
                 const SizedBox(height: YbsSpace.s3),
-                const Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: '30초 동안 상대를 찾지 못했어요.\n'),
-                    TextSpan(text: 'AI 상담원과 배틀', style: TextStyle(fontWeight: FontWeight.w700, color: YbsColor.textBody)),
-                    TextSpan(text: '할까요? 기세 시스템은 똑같이 작동해요.'),
-                  ]),
-                  style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textSub),
-                ),
+                const Text('30초 동안 상대를 찾지 못했어요.\n계속 기다리면 큐는 유지돼요 — 상대가 들어오는 즉시 연결됩니다.',
+                    style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textSub)),
                 const SizedBox(height: YbsSpace.s4 + 2),
                 YbsButton(
-                  label: 'AI와 배틀하기',
+                  label: 'AI와 배틀하기 (준비 중)',
                   size: YbsButtonSize.lg,
                   fullWidth: true,
-                  onTap: () => context.go('/battle/demo/brief'),
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('AI 상담원 배틀은 준비 중이에요 — 조금만 기다려 주세요.')),
+                  ),
                 ),
                 const SizedBox(height: YbsSpace.s2 + 2),
                 YbsButton(
@@ -264,7 +332,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
                   variant: YbsButtonVariant.secondary,
                   fullWidth: true,
                   onTap: () => setState(() {
-                    _state = _State.searching;
+                    _state = _State.searching; // 큐는 유지 중 — 표시만 복귀
                     _elapsed = 0;
                   }),
                 ),

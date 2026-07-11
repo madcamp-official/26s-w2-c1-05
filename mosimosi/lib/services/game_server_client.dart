@@ -65,4 +65,25 @@ class GameServerClient {
     final wsBase = baseUrl.replaceFirst(RegExp('^http'), 'ws'); // http(s)→ws(s)
     return WebSocketChannel.connect(Uri.parse('$wsBase$path'));
   }
+
+  /// 매칭 큐 진입 — /ws/match (성사 시 서버가 matched 이벤트로 자기 몫 브리핑 전송).
+  WebSocketChannel connectMatchSocket({
+    required String userId,
+    required String nickname,
+    required String formFactor, // 'android' | 'windows'
+  }) {
+    final q = Uri(queryParameters: {
+      'user_id': userId,
+      'nickname': nickname,
+      'form_factor': formFactor,
+    }).query;
+    return connectWebSocket('/ws/match?$q');
+  }
+
+  /// 배틀 방 참가 — /ws/room/{roomId} (ready/utterance/hang_up ↔ state/utterance/verdict).
+  WebSocketChannel connectRoomSocket({
+    required String roomId,
+    required String userId,
+  }) =>
+      connectWebSocket('/ws/room/$roomId?user_id=$userId');
 }
