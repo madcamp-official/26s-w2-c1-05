@@ -122,30 +122,35 @@ class BossBriefingScreen extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: YbsSpace.s5),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _cardLabel('상황'),
-                        const SizedBox(height: YbsSpace.s2),
-                        _scenarioText(boss),
-                        const Spacer(),
-                        Row(children: [
-                          _inlineStat('제한 시간', _limit(boss), YbsColor.textHero),
-                          const SizedBox(width: YbsSpace.s5),
-                          _inlineStat('최고 기록 · 도전 2회', _bestScores[boss.id] ?? '—', YbsColor.gold400),
-                        ]),
-                      ],
+            // IntrinsicHeight: 부모 Column이 이 Row에 무한 높이를 주므로
+            // (mainAxisSize.max + 언바운드 컨텍스트), stretch가 자식에 강제할
+            // 유한한 기준 높이가 필요 — 두 카드를 콘텐츠 기준 동일 높이로.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _cardLabel('상황'),
+                          const SizedBox(height: YbsSpace.s2),
+                          _scenarioText(boss),
+                          const Spacer(),
+                          Row(children: [
+                            _inlineStat('제한 시간', _limit(boss), YbsColor.textHero),
+                            const SizedBox(width: YbsSpace.s5),
+                            _inlineStat('최고 기록 · 도전 2회', _bestScores[boss.id] ?? '—', YbsColor.gold400),
+                          ]),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: YbsSpace.s4),
-                Expanded(child: _conditionsCard(boss)),
-              ],
+                  const SizedBox(width: YbsSpace.s4),
+                  Expanded(child: _conditionsCard(boss)),
+                ],
+              ),
             ),
             const SizedBox(height: YbsSpace.s6),
             Center(child: SizedBox(width: 360, child: _callCta(context, boss))),
