@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 load_dotenv()
 
-from . import api, db, llm, matching, rooms  # noqa: E402
+from . import api, db, llm, matching, rooms, stt  # noqa: E402
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app.include_router(api.router)
 app.include_router(llm.router)
 app.include_router(matching.router)
 app.include_router(rooms.router)
+app.include_router(stt.router)
 
 
 @app.get("/health")
