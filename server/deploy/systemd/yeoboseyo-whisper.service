@@ -1,0 +1,16 @@
+[Unit]
+Description=Yeoboseyo faster-whisper STT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/server/whisper
+ExecStart=/root/venvs/whisper/bin/python server.py
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

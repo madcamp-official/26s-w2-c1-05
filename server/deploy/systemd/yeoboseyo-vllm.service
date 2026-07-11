@@ -1,0 +1,17 @@
+[Unit]
+Description=Yeoboseyo vLLM (Qwen3-14B-AWQ)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+Environment=VLLM_USE_FLASHINFER_SAMPLER=0
+ExecStart=/root/venvs/llm/bin/python3 /root/venvs/llm/bin/vllm serve Qwen/Qwen3-14B-AWQ --max-model-len 4096 --gpu-memory-utilization 0.80 --max-num-seqs 8 --port 8000
+Restart=always
+RestartSec=10
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
