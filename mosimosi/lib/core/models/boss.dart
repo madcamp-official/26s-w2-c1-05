@@ -30,11 +30,18 @@ const String bossCommonRules = '''
 - 전화 통화 상황을 절대 벗어나지 마라. 지문·해설 없이 대사만 말해라.
 - 항상 한국어 구어체로만 답한다.''';
 
+/// 도감 티어 (디자인: normal=슬레이트, rare=스카이, boss=레드, legend=골드).
+enum BossTier { normal, rare, boss, legend }
+
 class Boss {
   const Boss({
     required this.id,
+    required this.number,
     required this.name,
     required this.subtitle,
+    required this.quote,
+    required this.tier,
+    required this.difficultyLevel,
     required this.portraitSyllable,
     required this.scenario,
     required this.personaPrompt,
@@ -44,8 +51,12 @@ class Boss {
   });
 
   final String id;
+  final int number; // 도감 번호 (No.00X)
   final String name;
   final String subtitle; // 도감/발신자 서브라벨
+  final String quote; // 대표 대사 (브리핑 「…」)
+  final BossTier tier;
+  final int difficultyLevel; // 별 1~5 (표시용)
   final String portraitSyllable; // 타이포 초상 (디자인 규칙: 첫 음절)
   final String scenario; // 브리핑 용건
   final String personaPrompt; // 페르소나 + few-shot 3개

@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 /// 여보세요 디자인 토큰 — claude.ai/design 프로토타입에서 추출.
 /// Dark-first 게임 UI. 화면 위젯은 색상을 하드코딩하지 말고 여기를 참조한다.
 ///
-/// 폰트: 프로토타입은 Black Han Sans / Pretendard / IBM Plex Mono (웹폰트)를 쓴다.
-/// 바이너리가 없어 여기선 패밀리명만 상수로 두고 미번들 → 시스템 폰트로 폴백된다.
-/// 실제 폰트는 라이선스 바이너리를 assets에 넣고 pubspec에 등록해 교체할 것.
+/// 폰트: Black Han Sans(디스플레이) / Pretendard(본문) / IBM Plex Mono(숫자).
+/// assets/fonts/에 번들, pubspec에 등록됨 (모두 SIL OFL).
 
 /// 색상 팔레트 (tokens/colors.css).
 class YbsColor {
@@ -47,12 +46,19 @@ class YbsColor {
   static Color get liveGlow => live500.withValues(alpha: 0.40);
   static Color get goldGlow => gold400.withValues(alpha: 0.35);
 
-  // ---- semantic (data-mode="incall" — 통화 화면 컨텍스트) ----
-  static const bgApp = Color(0xFF0A0509); // in-call 배경
-  static const surfaceCard = Color(0xFF170D12); // in-call 카드
+  // ---- semantic: 게임 레지스터 (기본 — 홈/도감/결과 등) ----
+  static const bgApp = ink950;
+  static const bgRaised = ink900;
+  static const surfaceCard = ink850;
+  static const surfaceCardHover = ink700;
   static const surfaceInset = Color(0xFF0A0D14);
-  static const borderSoft = Color(0xFF3A1B22); // in-call 경계
+  static const borderSoft = Color(0xFF232C3E);
   static const borderStrong = Color(0xFF364258);
+
+  // ---- 라이브 레지스터 (data-mode="incall" — 통화 화면 전용) ----
+  static const bgIncall = Color(0xFF0A0509);
+  static const surfaceIncall = Color(0xFF170D12);
+  static const borderIncall = Color(0xFF3A1B22);
 
   // ---- text ----
   static const textHero = white;

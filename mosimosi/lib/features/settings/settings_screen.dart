@@ -136,7 +136,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: Border.all(color: YbsColor.borderSoft),
           borderRadius: BorderRadius.circular(YbsRadius.md),
         ),
-        child: Column(children: children),
+        // ListTile 잉크가 장식된 Container에 가려지는 문제 방지.
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(children: children),
+        ),
       );
 
   Widget _row({required IconData icon, required String title, Widget? trailing, VoidCallback? onTap}) {

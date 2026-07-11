@@ -1,48 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../ui/breakpoints.dart';
+import '../../ui/components.dart';
 import '../../ui/theme.dart';
-import '../shell/main_shell.dart';
 
-/// 2.1 보스 도감 "전설의 진상 도감" — 모바일 2열 / 데스크톱 4~5열 그리드.
-/// FSD 3.1.1 초기 라인업 8종. 실데이터는 시드 3종(치킨/치과/환불)뿐이라
-/// 나머지 5종은 비주얼 스텁(잠김). 해금/클리어 상태는 영속화 전 목.
+/// 2.1 보스 도감 "전설의 진상 도감" — 디자인 E 섹션 이식.
+/// 모바일 2열 / 데스크톱 4열 + 필터 칩. 8종 중 실데이터는 시드 3종
+/// (No.001/002/008 → 탭 시 브리핑), 나머지는 비주얼 스텁. 상태는 목.
 class BossListScreen extends StatelessWidget {
   const BossListScreen({super.key});
 
+  // 디자인 데이터 이식 (실보스 매핑: 1→chicken, 2→dental, 8→refund).
   static const _entries = [
-    _Entry(1, 'chicken', '무던한 치킨집 사장님', '치', '배달 주문', 1, _Tier.normal, _State.cleared),
-    _Entry(2, null, '바쁜 미용실 원장', '바', '예약 잡기', 2, _Tier.normal, _State.locked),
-    _Entry(3, 'dental', '따발총 치과 접수원', '따', '진료 예약 + 보험', 3, _Tier.rare, _State.unlocked),
-    _Entry(4, null, '한숨 쉬는 공무원', '한', '서류 발급 문의', 3, _Tier.rare, _State.locked),
-    _Entry(5, null, '말 끊는 거래처 부장', '말', '업무 일정 조율', 4, _Tier.boss, _State.locked),
-    _Entry(6, null, '예약 멋대로 바꾼 미용실', '예', '항의 + 재조정', 4, _Tier.boss, _State.locked),
-    _Entry(7, null, '반말하는 사장님', '반', '급여 문의', 4, _Tier.boss, _State.locked),
-    _Entry(8, 'refund', '환불 불가 3연벙 상담원', '환', '환불 요구', 5, _Tier.legend, _State.unlocked),
+    _Entry(1, 'chicken', '무던한 치킨집 사장님', '주문 폭주에도 흔들림 없는 자', BossTierUi.normal, 1, false, true, '최고 92점 · 격파'),
+    _Entry(2, 'dental', '따발총 치과 접수원', '3초에 한 문장, 숨 쉴 틈 없음', BossTierUi.normal, 2, false, true, '최고 81점 · 격파'),
+    _Entry(3, null, '단호한 미용실 원장', '예약장부의 절대 지배자', BossTierUi.normal, 2, false, true, '최고 76점 · 격파'),
+    _Entry(4, null, '말 끊는 김 과장', '문장을 끝까지 들어본 적 없는 자', BossTierUi.rare, 3, false, false, '최고 71점 · 미격파'),
+    _Entry(5, null, '되묻는 보험 설계사', '', BossTierUi.rare, 3, true, false, '해금: No.004 격파 · 소문: 전화가 끝나지 않는다'),
+    _Entry(6, null, '', '', BossTierUi.rare, 4, true, false, '해금: No.005 격파 · 소문: 서류를 세 번 요구한다'),
+    _Entry(7, null, '', '', BossTierUi.boss, 4, true, false, '해금: No.006 격파 · 소문: 조항을 전부 외우고 있다'),
+    _Entry(8, 'refund', '환불 불가 3연벙 상담원', '최종 보스 · 환불은 안 됩니다', BossTierUi.legend, 5, false, false, '최고 87점 · 미격파 · 최종 보스'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final desktop = isDesktop(context);
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const YbsHeader(title: '전설의 진상 도감'),
+            Padding(
+              padding: EdgeInsets.fromLTRB(desktop ? 48 : YbsSpace.s5, desktop ? 40 : YbsSpace.s6, desktop ? 48 : YbsSpace.s5, 0),
+              child: _header(desktop),
+            ),
+            if (desktop)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(48, YbsSpace.s6, 48, 0),
+                child: _filterChips(),
+              ),
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final cols = c.maxWidth >= 1200 ? 5 : c.maxWidth >= 900 ? 4 : c.maxWidth >= 640 ? 3 : 2;
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(YbsSpace.s5),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      mainAxisSpacing: YbsSpace.s4,
-                      crossAxisSpacing: YbsSpace.s4,
-                      childAspectRatio: 0.78,
-                    ),
-                    itemCount: _entries.length,
-                    itemBuilder: (context, i) => _BossCard(entry: _entries[i]),
+              child: GridView.builder(
+                padding: EdgeInsets.all(desktop ? 48 : YbsSpace.s5).copyWith(top: YbsSpace.s4),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: desktop ? 4 : 2,
+                  mainAxisSpacing: desktop ? YbsSpace.s6 : YbsSpace.s3,
+                  crossAxisSpacing: desktop ? YbsSpace.s6 : YbsSpace.s3,
+                  childAspectRatio: 0.68,
+                ),
+                itemCount: _entries.length,
+                itemBuilder: (context, i) {
+                  final e = _entries[i];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: BossCardUi(
+                          number: e.no,
+                          name: e.name,
+                          title: e.title,
+                          tier: e.tier,
+                          difficulty: e.difficulty,
+                          locked: e.locked,
+                          cleared: e.cleared,
+                          onTap: e.id == null ? null : () => context.go('/bosses/${e.id}'),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(2, 6, 2, 0),
+                        child: Text(e.caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 10.5, height: 1.4, color: YbsColor.textFaint)),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -52,127 +84,133 @@ class BossListScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-enum _Tier { normal, rare, boss, legend }
-
-enum _State { locked, unlocked, cleared }
-
-class _Entry {
-  const _Entry(this.no, this.id, this.name, this.syllable, this.scenario, this.difficulty, this.tier, this.state);
-  final int no;
-  final String? id; // null = 비주얼 스텁 (미구현 보스)
-  final String name;
-  final String syllable;
-  final String scenario;
-  final int difficulty; // 1~5
-  final _Tier tier;
-  final _State state;
-}
-
-class _BossCard extends StatelessWidget {
-  const _BossCard({required this.entry});
-
-  final _Entry entry;
-
-  Color get _tierColor => switch (entry.tier) {
-        _Tier.normal => YbsColor.ink300,
-        _Tier.rare => YbsColor.sky400,
-        _Tier.boss => YbsColor.live500,
-        _Tier.legend => YbsColor.gold400,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final locked = entry.state == _State.locked || entry.id == null;
-    final card = Container(
-      padding: const EdgeInsets.all(YbsSpace.s4),
-      decoration: BoxDecoration(
-        color: YbsColor.surfaceCard,
-        border: Border.all(color: locked ? YbsColor.borderSoft : _tierColor.withValues(alpha: 0.7)),
-        borderRadius: BorderRadius.circular(YbsRadius.lg),
-        boxShadow: [
-          ...YbsShadow.card,
-          if (!locked) BoxShadow(color: _tierColor.withValues(alpha: 0.15), blurRadius: 20),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('No.${entry.no.toString().padLeft(3, '0')}',
-                  style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.textFaint)),
-              const Spacer(),
-              if (entry.state == _State.cleared)
-                Transform.rotate(
-                  angle: -0.07,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s2, vertical: 1),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: YbsColor.gold400, width: 1.5),
-                      borderRadius: BorderRadius.circular(YbsRadius.xs),
-                    ),
-                    child: const Text('격파',
-                        style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.micro, color: YbsColor.gold400)),
+  Widget _header(bool desktop) {
+    final progress = Column(
+      crossAxisAlignment: desktop ? CrossAxisAlignment.end : CrossAxisAlignment.stretch,
+      children: [
+        const Text('격파 3/8',
+            style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
+        const SizedBox(height: YbsSpace.s2),
+        SizedBox(
+          width: desktop ? 280 : null,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(YbsRadius.full),
+            child: Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: YbsColor.surfaceInset,
+                border: Border.all(color: YbsColor.borderSoft),
+                borderRadius: BorderRadius.circular(YbsRadius.full),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: 3 / 8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: YbsColor.live500,
+                    boxShadow: [BoxShadow(color: YbsColor.liveGlow, blurRadius: 12)],
                   ),
                 ),
-              if (locked) const Icon(Icons.lock, size: 14, color: YbsColor.textFaint),
-            ],
-          ),
-          const Spacer(),
-          Center(
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: YbsColor.surfaceInset,
-                border: Border.all(color: locked ? YbsColor.ink600 : _tierColor, width: 2),
-                gradient: locked
-                    ? null
-                    : RadialGradient(colors: [_tierColor.withValues(alpha: 0.22), Colors.transparent]),
               ),
-              alignment: Alignment.center,
-              child: Text(locked ? '?' : entry.syllable,
-                  style: TextStyle(
-                      fontFamily: YbsType.display,
-                      fontSize: 24,
-                      height: 1,
-                      color: locked ? YbsColor.textFaint : _tierColor)),
             ),
           ),
-          const Spacer(),
-          Text(locked ? '???' : entry.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: YbsType.sub,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                  color: locked ? YbsColor.textFaint : YbsColor.textHero)),
-          const SizedBox(height: 2),
-          Text(entry.scenario, style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
-          const SizedBox(height: YbsSpace.s2),
-          Row(children: [
-            for (var i = 0; i < 5; i++)
-              Padding(
-                padding: const EdgeInsets.only(right: 3),
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: i < entry.difficulty ? _tierColor : YbsColor.ink600,
-                  ),
+        ),
+      ],
+    );
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('전설의 진상 도감',
+            style: TextStyle(fontFamily: YbsType.display, fontSize: desktop ? YbsType.displaySize : 26, height: 1.15, color: YbsColor.white)),
+        const SizedBox(height: 6),
+        const Text('전화로 만난 전설들. 격파하고 수집하세요.',
+            style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+      ],
+    );
+    if (desktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [Expanded(child: titleBlock), progress],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Text('전설의 진상 도감',
+                style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1.15, color: YbsColor.white)),
+            Text('격파 3/8',
+                style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text('전화로 만난 전설들. 격파하고 수집하세요.', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+        const SizedBox(height: YbsSpace.s2 + 2),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(YbsRadius.full),
+          child: Container(
+            height: 8,
+            decoration: BoxDecoration(
+              color: YbsColor.surfaceInset,
+              border: Border.all(color: YbsColor.borderSoft),
+              borderRadius: BorderRadius.circular(YbsRadius.full),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 3 / 8,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: YbsColor.live500,
+                  boxShadow: [BoxShadow(color: YbsColor.liveGlow, blurRadius: 12)],
                 ),
               ),
-          ]),
-        ],
-      ),
+            ),
+          ),
+        ),
+      ],
     );
-
-    if (locked) return Opacity(opacity: 0.75, child: card);
-    return GestureDetector(onTap: () => context.go('/bosses/${entry.id}'), child: card);
   }
+
+  Widget _filterChips() {
+    Widget chip(String label, {bool active = false}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? YbsColor.surfaceCardHover : Colors.transparent,
+            border: Border.all(color: active ? YbsColor.borderStrong : YbsColor.borderSoft),
+            borderRadius: BorderRadius.circular(YbsRadius.full),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                  color: active ? YbsColor.textHero : YbsColor.textSub)),
+        );
+    return Row(children: [
+      chip('전체', active: true),
+      const SizedBox(width: YbsSpace.s2),
+      chip('미격파'),
+      const SizedBox(width: YbsSpace.s2),
+      chip('격파'),
+      const SizedBox(width: YbsSpace.s2),
+      chip('전설'),
+    ]);
+  }
+}
+
+class _Entry {
+  const _Entry(this.no, this.id, this.name, this.title, this.tier, this.difficulty, this.locked, this.cleared, this.caption);
+  final int no;
+  final String? id; // null = 비주얼 스텁
+  final String name;
+  final String title;
+  final BossTierUi tier;
+  final int difficulty;
+  final bool locked;
+  final bool cleared;
+  final String caption;
 }

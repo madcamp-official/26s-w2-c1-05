@@ -140,7 +140,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
     final connectingPhase =
         s.phase == CallPhase.connecting || s.phase == CallPhase.ringing;
     return Container(
-      color: YbsColor.bgApp,
+      color: YbsColor.bgIncall,
       child: Column(
         children: [
           _patienceHeader(s),
@@ -185,7 +185,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
               height: 8,
               decoration: BoxDecoration(
                 color: YbsColor.surfaceInset,
-                border: Border.all(color: YbsColor.borderSoft),
+                border: Border.all(color: YbsColor.borderIncall),
                 borderRadius: BorderRadius.circular(YbsRadius.full),
               ),
               child: FractionallySizedBox(
@@ -332,8 +332,8 @@ class _BossCallScreenState extends State<BossCallScreen> {
               height: 36,
               padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4),
               decoration: BoxDecoration(
-                color: YbsColor.surfaceCard,
-                border: Border.all(color: YbsColor.borderSoft),
+                color: YbsColor.surfaceIncall,
+                border: Border.all(color: YbsColor.borderIncall),
                 borderRadius: BorderRadius.circular(YbsRadius.full),
               ),
               child: Row(
@@ -355,8 +355,8 @@ class _BossCallScreenState extends State<BossCallScreen> {
       margin: const EdgeInsets.fromLTRB(YbsSpace.s5, 0, YbsSpace.s5, YbsSpace.s2 + 2),
       padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3 + 2),
       decoration: BoxDecoration(
-        color: YbsColor.surfaceCard,
-        border: Border.all(color: YbsColor.borderSoft),
+        color: YbsColor.surfaceIncall,
+        border: Border.all(color: YbsColor.borderIncall),
         borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
       ),
       child: Column(
@@ -402,7 +402,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, YbsSpace.s6 + 2),
       decoration: const BoxDecoration(
         color: Color(0x59000000),
-        border: Border(top: BorderSide(color: YbsColor.borderSoft)),
+        border: Border(top: BorderSide(color: YbsColor.borderIncall)),
       ),
       child: Column(
         children: [
