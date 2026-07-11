@@ -513,17 +513,22 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                    boss
-                        ? _bossCardStat
-                        : _sessions == null
-                            ? '–'
-                            : '${r.wins}승 ${r.losses}패',
-                    style: TextStyle(
-                        fontFamily: YbsType.numeric,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: boss ? YbsColor.live400 : YbsColor.go400)),
+                Expanded(
+                  child: Text(
+                      boss
+                          ? _bossCardStat
+                          : _sessions == null
+                              ? '–'
+                              : '${r.wins}승 ${r.losses}패',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontFamily: YbsType.numeric,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: boss ? YbsColor.live400 : YbsColor.go400)),
+                ),
+                const SizedBox(width: YbsSpace.s2),
                 YbsButton(
                   label: boss ? '도전하기' : '매칭 시작',
                   variant: boss ? YbsButtonVariant.danger : YbsButtonVariant.primary,
