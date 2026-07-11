@@ -83,6 +83,27 @@ class JudgeResult {
         highlightQuote: j['highlightQuote'] as String? ?? '',
         highlightContext: j['highlightContext'] as String? ?? '',
       );
+
+  /// 서버 judge(jsonb) 저장용 — fromJson과 같은 키 (POST /sessions/{id}/end).
+  Map<String, dynamic> toJson() => {
+        'cleared': cleared,
+        'score': score,
+        'verdictLine': verdictLine,
+        'conditions': [
+          for (final c in conditions)
+            {'text': c.text, 'met': c.met, 'evidence': c.evidence},
+        ],
+        'improvements': [
+          for (final i in improvements)
+            {'situation': i.situation, 'better': i.better},
+        ],
+        'deliveryNote': deliveryNote,
+        'oneLiner': oneLiner,
+        'fillerCount': fillerCount,
+        'silenceCount': silenceCount,
+        'highlightQuote': highlightQuote,
+        'highlightContext': highlightContext,
+      };
 }
 
 class ConditionResult {

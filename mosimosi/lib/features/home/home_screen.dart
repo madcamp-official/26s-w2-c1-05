@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/data/bosses.dart';
+import '../../core/local_store.dart';
+import '../../core/models/boss.dart';
+import '../../services/player_records.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
@@ -8,11 +12,135 @@ import '../../ui/theme.dart';
 /// 1. 홈 (게임 로비) — 디자인 D 섹션 이식.
 /// 모바일: 세로 플로우 (헤더+인사 → 모드 카드 2 → 이어서 도전 → 오늘의 기록).
 /// 데스크톱: 네이티브 와이드 — 모드 카드 2 + 우측 활동 컬럼.
-/// 전적·연승 등 수치는 영속화 전 목 데이터.
-class HomeScreen extends StatelessWidget {
+/// 닉네임·격파·이어서 도전·오늘 기록·최근 통화는 서버 실데이터 (Phase 2 §5).
+/// 로딩/연결 실패 시 수치는 '–' 표시.
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  static const _nickname = '민준';
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  /// null = 로딩 중/연결 실패.
+  Map<String, BossProgress>? _progress;
+  List<SessionRecord>? _sessions;
+
+  String get _nickname => LocalStore.instance.nickname ?? '민준';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    recordsVersion.addListener(_load); // 판 종료 보고 후 재조회 (셸 탭 유지 대응)
+  }
+
+  @override
+  void dispose() {
+    recordsVersion.removeListener(_load);
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    // 각각 독립 best-effort — 한쪽 실패가 다른 쪽을 막지 않게.
+    fetchProgress().then((p) {
+      if (mounted) setState(() => _progress = p);
+    }).catchError((_) {});
+    fetchSessions(limit: 100).then((s) {
+      if (mounted) setState(() => _sessions = s);
+    }).catchError((_) {});
+  }
+
+  // ---- 파생 값 ----
+  int get _clearedCount =>
+      bossesSeed.where((b) => _progress?[b.id]?.cleared ?? false).length;
+
+  /// 다음 도전 보스 — 미격파 첫 보스, 올 클리어면 최종 보스(재도전).
+  Boss get _nextBoss => bossesSeed.firstWhere(
+      (b) => !(_progress?[b.id]?.cleared ?? false),
+      orElse: () => bossesSeed.last);
+
+  bool get _allCleared =>
+      _progress != null && bossesSeed.every((b) => _progress![b.id]?.cleared ?? false);
+
+  String get _nextBossCaption {
+    final progress = _progress;
+    if (progress == null) return '…';
+    if (_allCleared) return '전 보스 격파! · 재도전';
+    final p = progress[_nextBoss.id];
+    if (p == null) return '미도전';
+    if (p.bestScore != null) return '최고 ${p.bestScore}점 · 미격파';
+    return '도전 ${p.attempts}회 · 미격파';
+  }
+
+  String get _bossCardStat => _progress == null
+      ? '격파 –/8'
+      : _allCleared
+          ? '격파 $_clearedCount/8 · 올 클리어!'
+          : '격파 $_clearedCount/8 · 다음: No.${_nextBoss.number.toString().padLeft(3, '0')}';
+
+  ({int wins, int losses}) get _battleRecord {
+    final battles = (_sessions ?? const <SessionRecord>[])
+        .where((s) => s.mode == 'battle');
+    return (
+      wins: battles.where((s) => s.win).length,
+      losses: battles.where((s) => s.result == 'lose').length,
+    );
+  }
+
+  String get _battleStat {
+    if (_sessions == null) return '시즌 1 · –';
+    final r = _battleRecord;
+    return '시즌 1 · ${r.wins}승 ${r.losses}패';
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  List<SessionRecord> get _todaySessions {
+    final now = DateTime.now();
+    return (_sessions ?? const <SessionRecord>[])
+        .where((s) => _isSameDay(s.startedAt, now))
+        .toList();
+  }
+
+  String get _todayCalls => _sessions == null ? '–' : '${_todaySessions.length}';
+
+  String get _todayWins =>
+      _sessions == null ? '–' : '${_todaySessions.where((s) => s.win).length}';
+
+  String get _weekBest {
+    final sessions = _sessions;
+    if (sessions == null) return '–';
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    var best = 0;
+    for (final s in sessions) {
+      if (s.startedAt.isAfter(cutoff) && (s.score ?? 0) > best) best = s.score!;
+    }
+    return '$best';
+  }
+
+  /// 연속 플레이 일수 — 오늘(또는 어제)부터 거꾸로 이어진 날 수.
+  int get _streak {
+    final sessions = _sessions;
+    if (sessions == null || sessions.isEmpty) return 0;
+    final days = {
+      for (final s in sessions)
+        DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day),
+    };
+    final today = DateTime.now();
+    var cursor = DateTime(today.year, today.month, today.day);
+    if (!days.contains(cursor)) {
+      cursor = cursor.subtract(const Duration(days: 1)); // 오늘 아직 안 했으면 어제부터
+      if (!days.contains(cursor)) return 0;
+    }
+    var streak = 0;
+    while (days.contains(cursor)) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +165,10 @@ class HomeScreen extends StatelessWidget {
                 const Text('여보세요',
                     style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.title, height: 1, color: YbsColor.white)),
                 Row(children: [
-                  const StreakBadge(count: 3, label: '일 연속'),
-                  const SizedBox(width: YbsSpace.s2),
+                  if (_streak > 0) ...[
+                    StreakBadge(count: _streak, label: '일 연속'),
+                    const SizedBox(width: YbsSpace.s2),
+                  ],
                   // 설정 진입 (디자인 데스크톱 헤더의 아바타를 모바일에도 사용)
                   GestureDetector(
                     onTap: () => context.push('/settings'),
@@ -48,14 +178,14 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 - 2, YbsSpace.s5, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 - 2, YbsSpace.s5, 0),
             child: Text.rich(
               TextSpan(children: [
-                TextSpan(text: _nickname, style: TextStyle(fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                TextSpan(text: ' 님, 오늘은 누구한테 걸어볼까요?'),
+                TextSpan(text: _nickname, style: const TextStyle(fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+                const TextSpan(text: ' 님, 오늘은 누구한테 걸어볼까요?'),
               ]),
-              style: TextStyle(fontSize: 15, color: YbsColor.textSub),
+              style: const TextStyle(fontSize: 15, color: YbsColor.textSub),
             ),
           ),
           Padding(
@@ -116,10 +246,10 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: YbsSpace.s2 + 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('격파 3/8',
-                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.live400)),
-                Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
+              children: [
+                Text('격파 ${_progress == null ? '–' : _clearedCount}/8',
+                    style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.live400)),
+                const Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
               ],
             ),
           ],
@@ -174,10 +304,10 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: YbsSpace.s2 + 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('시즌 1 · 12승 9패',
-                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.go400)),
-                Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
+              children: [
+                Text(_battleStat,
+                    style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.go400)),
+                const Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
               ],
             ),
           ],
@@ -187,10 +317,11 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _continueSection(BuildContext context) {
+    final boss = _nextBoss;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('이어서 도전',
+        Text(_allCleared ? '다시 도전' : '이어서 도전',
             style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro) / 2, color: YbsColor.textFaint)),
         const SizedBox(height: YbsSpace.s2),
         Container(
@@ -216,24 +347,27 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
                 ),
                 alignment: Alignment.center,
-                child: const Text('말',
-                    style: TextStyle(fontFamily: YbsType.display, fontSize: 19, height: 1, color: YbsColor.sky400)),
+                child: Text(boss.portraitSyllable,
+                    style: const TextStyle(fontFamily: YbsType.display, fontSize: 19, height: 1, color: YbsColor.sky400)),
               ),
               const SizedBox(width: YbsSpace.s3),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('No.004 말 끊는 김 과장',
+                    Text('No.${boss.number.toString().padLeft(3, '0')} ${boss.name}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                    Text('최고 71점 · 미격파', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
+                        style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+                    Text(_nextBossCaption, style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
                   ],
                 ),
               ),
-              // 미구현 보스(No.004) — 도감으로 안내
-              YbsButton(label: '재도전', variant: YbsButtonVariant.secondary, size: YbsButtonSize.sm, onTap: () => context.go('/bosses')),
+              YbsButton(
+                  label: '도전',
+                  variant: YbsButtonVariant.secondary,
+                  size: YbsButtonSize.sm,
+                  onTap: () => context.go('/bosses/${boss.id}')),
             ],
           ),
         ),
@@ -267,11 +401,11 @@ class HomeScreen extends StatelessWidget {
             style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro) / 2, color: YbsColor.textFaint)),
         const SizedBox(height: YbsSpace.s2),
         Row(children: [
-          stat('2', '오늘 통화', YbsColor.textHero),
+          stat(_todayCalls, '오늘 통화', YbsColor.textHero),
           const SizedBox(width: YbsSpace.s2 + 2),
-          stat('1', '승리', YbsColor.go400),
+          stat(_todayWins, '승리', YbsColor.go400),
           const SizedBox(width: YbsSpace.s2 + 2),
-          stat('87', '주간 최고점', YbsColor.gold400),
+          stat(_weekBest, '주간 최고점', YbsColor.gold400),
         ]),
       ],
     );
@@ -290,23 +424,25 @@ class HomeScreen extends StatelessWidget {
               const Text('여보세요',
                   style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1, color: YbsColor.white)),
               Row(children: [
-                const StreakBadge(count: 3, label: '일 연속'),
-                const SizedBox(width: YbsSpace.s4 - 2),
+                if (_streak > 0) ...[
+                  StreakBadge(count: _streak, label: '일 연속'),
+                  const SizedBox(width: YbsSpace.s4 - 2),
+                ],
                 GestureDetector(
                   onTap: () => context.push('/settings'),
                   child: Row(children: [
                     _avatar(size: 36, fontSize: 15),
                     const SizedBox(width: YbsSpace.s2 + 2),
-                    const Text(_nickname,
-                        style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textBody)),
+                    Text(_nickname,
+                        style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textBody)),
                   ]),
                 ),
               ]),
             ],
           ),
           const SizedBox(height: 28),
-          const Text('$_nickname 님, 오늘은 누구한테 걸어볼까요?',
-              style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, height: 1.15, color: YbsColor.textHero)),
+          Text('$_nickname 님, 오늘은 누구한테 걸어볼까요?',
+              style: const TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, height: 1.15, color: YbsColor.textHero)),
           const SizedBox(height: 28),
           Expanded(
             child: Row(
@@ -327,6 +463,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _bigModeCard(BuildContext context, {required bool boss}) {
     final accent = boss ? YbsColor.live500 : YbsColor.go500;
+    final r = _battleRecord;
     return GestureDetector(
       onTap: () => boss ? context.go('/bosses') : context.push('/battle'),
       child: Container(
@@ -376,7 +513,12 @@ class HomeScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(boss ? '격파 3/8 · 다음: No.004' : '12승 9패 · 은메달',
+                Text(
+                    boss
+                        ? _bossCardStat
+                        : _sessions == null
+                            ? '–'
+                            : '${r.wins}승 ${r.losses}패',
                     style: TextStyle(
                         fontFamily: YbsType.numeric,
                         fontSize: 13,
@@ -396,25 +538,42 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _activityColumn(BuildContext context) {
-    Widget resultRow(bool win, String label, String score) => Padding(
-          padding: const EdgeInsets.only(bottom: YbsSpace.s3),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                border: Border.all(color: win ? YbsColor.gold500 : YbsColor.live600),
-                borderRadius: BorderRadius.circular(YbsRadius.xs),
-              ),
-              child: Text(win ? 'WIN' : 'LOSE',
-                  style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w700, color: win ? YbsColor.gold400 : YbsColor.live400)),
+    Widget resultRow(SessionRecord s) {
+      final win = s.win;
+      final bossName = s.mode == 'boss'
+          ? bossesSeed
+              .where((b) => b.id == s.bossId)
+              .map((b) => b.name)
+              .firstOrNull
+          : null;
+      final label = s.mode == 'boss' ? '보스전 · ${bossName ?? s.bossId ?? '?'}' : '배틀';
+      return Padding(
+        padding: const EdgeInsets.only(bottom: YbsSpace.s3),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              border: Border.all(color: win ? YbsColor.gold500 : YbsColor.live600),
+              borderRadius: BorderRadius.circular(YbsRadius.xs),
             ),
-            const SizedBox(width: YbsSpace.s2 + 2),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textBody))),
-            Text(score,
-                style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, color: win ? YbsColor.gold400 : YbsColor.textFaint)),
-          ]),
-        );
+            child: Text(win ? 'WIN' : 'LOSE',
+                style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w700, color: win ? YbsColor.gold400 : YbsColor.live400)),
+          ),
+          const SizedBox(width: YbsSpace.s2 + 2),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textBody)),
+          ),
+          Text(s.score == null ? '—' : '${s.score}',
+              style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, color: win ? YbsColor.gold400 : YbsColor.textFaint)),
+        ]),
+      );
+    }
 
+    final boss = _nextBoss;
+    final recent = (_sessions ?? const <SessionRecord>[]).take(3).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -429,7 +588,8 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('이어서 도전', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.textSub)),
+              Text(_allCleared ? '다시 도전' : '이어서 도전',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.textSub)),
               const SizedBox(height: YbsSpace.s3),
               Row(children: [
                 Container(
@@ -446,21 +606,27 @@ class HomeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
                   ),
                   alignment: Alignment.center,
-                  child: const Text('말',
-                      style: TextStyle(fontFamily: YbsType.display, fontSize: 21, height: 1, color: YbsColor.sky400)),
+                  child: Text(boss.portraitSyllable,
+                      style: const TextStyle(fontFamily: YbsType.display, fontSize: 21, height: 1, color: YbsColor.sky400)),
                 ),
                 const SizedBox(width: YbsSpace.s3),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('No.004 말 끊는 김 과장',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                      Text('최고 71점 · 미격파 · 희귀', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
+                      Text('No.${boss.number.toString().padLeft(3, '0')} ${boss.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+                      Text(_nextBossCaption, style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
                     ],
                   ),
                 ),
-                YbsButton(label: '재도전', variant: YbsButtonVariant.secondary, size: YbsButtonSize.sm, onTap: () => context.go('/bosses')),
+                YbsButton(
+                    label: '도전',
+                    variant: YbsButtonVariant.secondary,
+                    size: YbsButtonSize.sm,
+                    onTap: () => context.go('/bosses/${boss.id}')),
               ]),
             ],
           ),
@@ -480,16 +646,19 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const Text('최근 통화', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.textSub)),
                 const SizedBox(height: YbsSpace.s4 - 2),
-                resultRow(true, '보스전 · 단호한 미용실 원장', '76'),
-                resultRow(false, '배틀 · vs 환불전사_수원', '42:58'),
-                resultRow(false, '보스전 · 말 끊는 김 과장', '71'),
+                if (_sessions == null)
+                  const Text('불러오는 중…', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint))
+                else if (recent.isEmpty)
+                  const Text('아직 통화 기록이 없어요', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint))
+                else
+                  for (final s in recent) resultRow(s),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text('도감 진행', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
-                    Text('3/8',
-                        style: TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
+                  children: [
+                    const Text('도감 진행', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+                    Text(_progress == null ? '–/8' : '$_clearedCount/8',
+                        style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
                   ],
                 ),
                 const SizedBox(height: YbsSpace.s2),
@@ -502,10 +671,10 @@ class HomeScreen extends StatelessWidget {
                       border: Border.all(color: YbsColor.borderSoft),
                       borderRadius: BorderRadius.circular(YbsRadius.full),
                     ),
-                    child: const FractionallySizedBox(
+                    child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: 0.375,
-                      child: ColoredBox(color: YbsColor.live500),
+                      widthFactor: _clearedCount / 8,
+                      child: const ColoredBox(color: YbsColor.live500),
                     ),
                   ),
                 ),
@@ -518,6 +687,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _avatar({required double size, required double fontSize}) {
+    final syllable = _nickname.isEmpty ? '?' : _nickname.characters.first;
     return Container(
       width: size,
       height: size,
@@ -532,7 +702,7 @@ class HomeScreen extends StatelessWidget {
         border: Border.all(color: YbsColor.go600, width: 2),
       ),
       alignment: Alignment.center,
-      child: Text('민',
+      child: Text(syllable,
           style: TextStyle(fontFamily: YbsType.display, fontSize: fontSize, height: 1, color: YbsColor.go400)),
     );
   }

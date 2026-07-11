@@ -24,9 +24,11 @@ import '../features/spike/spike_screen.dart';
 /// TODO: 통화 라우트 직접 진입 시 세션 유효성 검사 → 무효면 브리핑 리다이렉트.
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-final GoRouter appRouter = GoRouter(
+/// main()이 LocalStore 로드 후 첫 화면을 정해 호출한다
+/// (user_id 있으면 '/home', 없으면 '/onboarding' — Phase 2 §2 온보딩 스킵).
+GoRouter buildRouter({required String initialLocation}) => GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: '/home',
+  initialLocation: initialLocation,
   routes: [
     GoRoute(
       path: '/onboarding',

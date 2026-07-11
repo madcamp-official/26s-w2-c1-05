@@ -7,9 +7,11 @@ import '../../core/call/call_session.dart';
 import '../../core/call/llm_tasks.dart';
 import '../../core/call/session_store.dart';
 import '../../core/data/bosses.dart';
+import '../../core/local_store.dart';
 import '../../core/models/boss.dart';
 import '../../platform/stt_factory.dart';
 import '../../platform/tts_factory.dart';
+import '../../services/game_server_client.dart';
 import '../../services/llm_factory.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
@@ -51,6 +53,17 @@ class _BossCallScreenState extends State<BossCallScreen> {
       tts: createTtsEngine(),
       llm: llm,
       generateVariables: () => generateScenarioVariables(llm: llm, boss: boss),
+      startServerSession: (variables) async {
+        final userId = LocalStore.instance.userId;
+        if (userId == null) return null; // 계정 없음 — 서버 기록 스킵
+        final res = await GameServerClient().postJson('/sessions', {
+          'user_id': userId,
+          'mode': 'boss',
+          'boss_id': boss.id,
+          'scenario_variables': variables,
+        });
+        return res['id'] as String?;
+      },
     );
     _session = session;
     session.addListener(_onSession);
@@ -75,6 +88,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
           transcript: spoken,
           endReason: s.endReason!,
           elapsedMs: s.elapsedMs,
+          serverSessionId: s.serverSessionId,
         ),
       );
       if (mounted) {

@@ -42,6 +42,7 @@ class CallSessionController extends ChangeNotifier {
     required this.tts,
     required this.llm,
     required this.generateVariables,
+    this.startServerSession,
   });
 
   final Boss boss;
@@ -50,7 +51,15 @@ class CallSessionController extends ChangeNotifier {
   final LlmClient llm;
   final Future<List<String>> Function() generateVariables;
 
+  /// 서버 세션 개시 (POST /sessions → UUID, Phase 2 §4). null이면 미보고.
+  /// active 진입 시 fire-and-forget — 실패해도 통화는 계속 (오프라인 내성).
+  final Future<String?> Function(List<String> variables)? startServerSession;
+
+  /// 로컬 세션 키 (라우트·SessionStore용) — 서버 UUID와 별개.
   final String sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+
+  /// 서버 sessions.id (UUID). POST /sessions 성공 전·실패 시 null.
+  String? serverSessionId;
 
   // ---- 튜닝 상수 ----
   static const _silenceAfter = Duration(seconds: 6); // 내 차례에 이만큼 조용하면 경고
@@ -276,6 +285,11 @@ class CallSessionController extends ChangeNotifier {
     _started = true;
     _startedAt = DateTime.now();
     _ticker = Timer.periodic(_tickInterval, (_) => _tick());
+    // 실제 대화가 시작된 시점에만 서버 세션 개시 (연결 중 취소는 서버에 안 남김).
+    startServerSession?.call(variables).then(
+          (id) => serverSessionId = id,
+          onError: (_) {}, // 보고 실패 무시 — 통화 지속이 우선
+        );
   }
 
   void _tick() {

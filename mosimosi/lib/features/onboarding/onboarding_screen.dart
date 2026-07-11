@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/local_store.dart';
 import '../../platform/stt_factory.dart';
+import '../../services/game_server_client.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
 /// 0. 온보딩 (3단계) — 디자인 K 섹션 이식: 컨셉 → 마이크 권한 → 닉네임.
-/// 닉네임 저장 등 영속화는 미구현. '마이크 허용'은 실제 권한 요청
-/// (SttEngine.initialize)을 수행하고, 데스크톱 2단계는 연결 체크리스트 표시.
+/// 닉네임 확정 시 POST /users → user_id 로컬 저장 (Phase 2 §2).
+/// 이미 계정이 있으면(설정 '온보딩 다시 보기' 재진입) 서버 호출 없이 통과.
+/// '마이크 허용'은 실제 권한 요청(SttEngine.initialize)을 수행하고,
+/// 데스크톱 2단계는 연결 체크리스트 표시.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -20,7 +24,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
   int _index = 0;
   bool? _sttReady; // null = 미확인
-  final _nickname = TextEditingController(text: '민준');
+  late final TextEditingController _nickname =
+      TextEditingController(text: LocalStore.instance.nickname ?? '민준');
+  bool _submitting = false;
+  String? _nicknameError;
 
   @override
   void dispose() {
@@ -31,6 +38,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _next() =>
       _page.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+
+  /// 닉네임 확정 → 계정 생성 → 첫 보스 브리핑으로.
+  Future<void> _submitNickname() async {
+    if (_submitting) return;
+    // 재진입(온보딩 다시 보기): 계정 유지, 서버 호출 없이 통과.
+    // (닉네임 변경 API는 없음 — 변경은 서버 PATCH 추가 후.)
+    if (LocalStore.instance.hasUser) {
+      context.go('/bosses/chicken');
+      return;
+    }
+    final nickname = _nickname.text.trim();
+    if (nickname.isEmpty) {
+      setState(() => _nicknameError = '닉네임을 입력해 주세요');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _nicknameError = null;
+    });
+    try {
+      final res =
+          await GameServerClient().postJson('/users', {'nickname': nickname});
+      await LocalStore.instance
+          .saveUser(userId: res['id'] as String, nickname: nickname);
+      if (mounted) context.go('/bosses/chicken');
+    } on GameServerException catch (e) {
+      if (mounted) {
+        setState(() => _nicknameError =
+            e.statusCode == 409 ? '이미 사용 중인 닉네임이에요' : '서버 오류 — 잠시 후 다시 시도해 주세요');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _nicknameError = '서버에 연결할 수 없어요 — 네트워크를 확인해 주세요');
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   Future<void> _requestMic() async {
     final ok = await createSttEngine().initialize();
@@ -269,7 +314,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: YbsSpace.s2 + 2),
-                const Text('사용할 수 있는 이름이에요', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.go400)),
+                Text(_nicknameError ?? '배틀과 랭킹에서 쓸 이름이에요',
+                    style: TextStyle(
+                        fontSize: YbsType.micro,
+                        color: _nicknameError == null ? YbsColor.go400 : YbsColor.live400)),
                 const SizedBox(height: YbsSpace.s5),
                 Wrap(
                   alignment: WrapAlignment.center,
@@ -281,7 +329,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
-        _footer(cta: '첫 보스에게 전화 걸기', onTap: () => context.go('/bosses/chicken')),
+        _footer(
+            cta: _submitting ? '계정 만드는 중…' : '첫 보스에게 전화 걸기',
+            onTap: _submitNickname),
       ],
     );
   }
