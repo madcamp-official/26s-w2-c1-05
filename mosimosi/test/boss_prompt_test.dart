@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosimosi/core/data/bosses.dart';
 import 'package:mosimosi/core/models/boss.dart';
 
 /// Boss.buildSystemPrompt / DifficultyParams.render 순수 문자열 조립 테스트.
@@ -39,46 +40,32 @@ void main() {
   });
 
   group('Boss.buildSystemPrompt', () {
-    Boss makeBoss() => const Boss(
-          id: 'test',
-          name: '테스트 보스',
-          subtitle: 'sub',
-          portraitSyllable: '테',
-          scenario: '시나리오',
-          personaPrompt: 'PERSONA_MARKER',
-          clearConditions: ['조건1'],
-          timeLimit: Duration(minutes: 3),
-          difficulty: DifficultyParams(
-            maxSentences: 2,
-            cooperativeness: 3,
-            surpriseFreq: 4,
-            interrupts: false,
-          ),
-        );
+    // 실제 시드 보스 사용 — Boss 생성자 형태(필드 추가/변경)에 무의존.
+    final boss = bossById('chicken')!;
 
     test('페르소나·난이도·공통규칙이 모두 포함된다', () {
-      final p = makeBoss().buildSystemPrompt(const []);
-      expect(p, contains('PERSONA_MARKER'));
+      final p = boss.buildSystemPrompt(const []);
+      expect(p, contains(boss.personaPrompt));
       expect(p, contains('[난이도]'));
-      expect(p, contains('협조성 3/5'));
+      expect(p, contains(boss.difficulty.render()));
       expect(p, contains(bossCommonRules));
     });
 
     test('변수가 비면 상황 변수 섹션이 없다', () {
-      final p = makeBoss().buildSystemPrompt(const []);
+      final p = boss.buildSystemPrompt(const []);
       expect(p, isNot(contains('상황 변수')));
     });
 
     test('변수가 있으면 각 항목이 불릿으로 주입된다', () {
-      final p = makeBoss().buildSystemPrompt(['품절: 양념치킨', '이벤트: 콜라 증정']);
+      final p = boss.buildSystemPrompt(['품절: 양념치킨', '이벤트: 콜라 증정']);
       expect(p, contains('상황 변수'));
       expect(p, contains('- 품절: 양념치킨'));
       expect(p, contains('- 이벤트: 콜라 증정'));
     });
 
     test('페르소나가 맨 앞, 공통 규칙이 맨 뒤 순서', () {
-      final p = makeBoss().buildSystemPrompt(const []);
-      expect(p.indexOf('PERSONA_MARKER'), lessThan(p.indexOf(bossCommonRules)));
+      final p = boss.buildSystemPrompt(const []);
+      expect(p.indexOf(boss.personaPrompt), lessThan(p.indexOf(bossCommonRules)));
       expect(p.indexOf('[난이도]'), lessThan(p.indexOf(bossCommonRules)));
     });
   });
