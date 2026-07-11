@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
@@ -328,10 +329,11 @@ class _PhoneBody extends StatelessWidget {
 
   Widget _captionList() {
     final caps = state._captions;
-    return Padding(
+    // 전사 로그는 하단 고정 + 넘치면 스크롤(reverse). 말풍선이 남은 높이를 넘어도 오버플로우 없음.
+    return SingleChildScrollView(
+      reverse: true,
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s4),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < caps.length; i++) ...[
@@ -398,7 +400,11 @@ class _PhoneBody extends StatelessWidget {
           const SizedBox(width: YbsSpace.s6 + 2),
           const CallIconButton(icon: Icons.volume_up, label: '스피커'),
           const SizedBox(width: YbsSpace.s6 + 2),
-          CallIconButton(icon: Icons.call_end, label: '종료', kind: CallButtonKind.endCall, onTap: () => Navigator.of(context).maybePop()),
+          CallIconButton(
+              icon: Icons.call_end,
+              label: '종료',
+              kind: CallButtonKind.endCall,
+              onTap: () => context.go('/battle/${state.widget.roomId}/result')),
         ],
       ),
     );

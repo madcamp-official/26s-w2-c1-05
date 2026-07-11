@@ -27,7 +27,11 @@ class GeminiClient implements LlmClient {
   final LlmLogger _logger;
 
   @override
-  Stream<String> chatStream(List<LlmMessage> messages) async* {
+  Stream<String> chatStream(
+    List<LlmMessage> messages, {
+    double? temperature,
+    int? maxOutputTokens,
+  }) async* {
     final systemText = messages
         .where((m) => m.role == 'system')
         .map((m) => m.content)
@@ -51,9 +55,9 @@ class GeminiClient implements LlmClient {
         },
       'contents': contents,
       'generationConfig': {
-        'temperature': 0.9,
-        'maxOutputTokens': 256,
-        // 저지연 목표(1.5s) — 2.5-flash 기본 thinking 비활성화.
+        'temperature': temperature ?? 0.9,
+        'maxOutputTokens': maxOutputTokens ?? 256,
+        // 저지연 목표(1.5s) — 기본 thinking 비활성화.
         'thinkingConfig': {'thinkingBudget': 0},
       },
     };
