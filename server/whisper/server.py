@@ -24,10 +24,11 @@ FRAME_BYTES = SAMPLE_RATE * FRAME_MS // 1000 * 2  # 16-bit mono → 960 bytes
 SILENCE_MS = 800
 SILENCE_FRAMES = SILENCE_MS // FRAME_MS  # ≈ 26 프레임
 
-# 기본값 = 3090(GPU). 로컬 CPU 테스트: WHISPER_DEVICE=cpu WHISPER_COMPUTE=int8
+# 기본값 = 3090(GPU) + large-v3(한국어 정확도↑). 로컬 CPU: WHISPER_DEVICE=cpu WHISPER_COMPUTE=int8
+MODEL = os.getenv("WHISPER_MODEL", "large-v3")
 DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
-COMPUTE = os.getenv("WHISPER_COMPUTE", "float16")
-model = WhisperModel("small", device=DEVICE, compute_type=COMPUTE)
+COMPUTE = os.getenv("WHISPER_COMPUTE", "int8_float16")  # large-v3를 ~1.8GB로(정확도 손실 미미)
+model = WhisperModel(MODEL, device=DEVICE, compute_type=COMPUTE)
 vad = webrtcvad.Vad(2)  # 0(관대)~3(엄격)
 
 
