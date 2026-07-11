@@ -26,6 +26,7 @@ JSON만 출력: {"variables": ["...", "..."]}''';
 
   final raw = await llm.chatStream(
     [LlmMessage(role: 'user', content: prompt)],
+    task: 'scenario',
     temperature: 1.0,
     maxOutputTokens: 256,
   ).join();
@@ -45,6 +46,10 @@ class JudgeResult {
     required this.improvements,
     required this.deliveryNote,
     required this.oneLiner,
+    required this.fillerCount,
+    required this.silenceCount,
+    required this.highlightQuote,
+    required this.highlightContext,
   });
 
   final bool cleared;
@@ -54,6 +59,10 @@ class JudgeResult {
   final List<Improvement> improvements; // "이렇게 말했다면" 2~3개
   final String deliveryNote; // 더듬은 구간/필러/침묵 코멘트
   final String oneLiner; // 오늘의 한마디
+  final int fillerCount; // 군말("어…","그…") 횟수
+  final int silenceCount; // 2초+ 침묵 횟수
+  final String highlightQuote; // 하이라이트 카드용 플레이어 명대사
+  final String highlightContext; // 그 순간 설명
 
   factory JudgeResult.fromJson(Map<String, dynamic> j) => JudgeResult(
         cleared: j['cleared'] == true,
@@ -69,7 +78,32 @@ class JudgeResult {
         ],
         deliveryNote: j['deliveryNote'] as String? ?? '',
         oneLiner: j['oneLiner'] as String? ?? '',
+        fillerCount: (j['fillerCount'] as num?)?.round() ?? 0,
+        silenceCount: (j['silenceCount'] as num?)?.round() ?? 0,
+        highlightQuote: j['highlightQuote'] as String? ?? '',
+        highlightContext: j['highlightContext'] as String? ?? '',
       );
+
+  /// 서버 judge(jsonb) 저장용 — fromJson과 같은 키 (POST /sessions/{id}/end).
+  Map<String, dynamic> toJson() => {
+        'cleared': cleared,
+        'score': score,
+        'verdictLine': verdictLine,
+        'conditions': [
+          for (final c in conditions)
+            {'text': c.text, 'met': c.met, 'evidence': c.evidence},
+        ],
+        'improvements': [
+          for (final i in improvements)
+            {'situation': i.situation, 'better': i.better},
+        ],
+        'deliveryNote': deliveryNote,
+        'oneLiner': oneLiner,
+        'fillerCount': fillerCount,
+        'silenceCount': silenceCount,
+        'highlightQuote': highlightQuote,
+        'highlightContext': highlightContext,
+      };
 }
 
 class ConditionResult {
@@ -133,18 +167,24 @@ $log
 평가 규칙:
 - 각 클리어 조건의 달성 여부를 반드시 통화 기록의 실제 대사 인용(evidence)으로 뒷받침해라.
 - cleared는 조건 전부 달성 시에만 true.
-- improvements는 플레이어가 실제로 서툴렀던 순간 2~3개를 골라 "이렇게 말했다면" 대안 문장을 제시해라.
-- deliveryNote에는 더듬음·군말("어…", "그…")·침묵 등 말하기 습관을 짧게 코멘트해라.
+- improvements는 플레이어가 실제로 서툴렀던 순간 2~3개를 골라, situation에는 실제 발화(또는 침묵)를,
+  better에는 "이렇게 말했다면" 대안 문장을 제시해라.
+- deliveryNote에는 더듬음·군말·침묵 등 말하기 습관을 짧게 코멘트해라.
+- fillerCount는 플레이어 발화의 군말("어…", "그…", "음…") 횟수, silenceCount는 눈에 띄는 침묵 횟수 추정치.
+- highlightQuote는 플레이어의 가장 결정적인 실제 대사 1개, highlightContext는 그 순간을 한 줄로.
 - oneLiner는 리포트 맨 위에 붙는 위트 있는 한 줄 (상황을 놀리되 플레이어를 놀리지 마라).
 
 출력 JSON 스키마 (다른 텍스트 금지):
 {"cleared": bool, "score": 0-100, "verdictLine": "한 줄 판정 근거",
  "conditions": [{"text": "조건", "met": bool, "evidence": "인용 대사"}],
- "improvements": [{"situation": "그 순간", "better": "이렇게 말했다면"}],
- "deliveryNote": "말하기 습관 코멘트", "oneLiner": "오늘의 한마디"}''';
+ "improvements": [{"situation": "실제 발화", "better": "이렇게 말했다면"}],
+ "deliveryNote": "말하기 습관 코멘트", "oneLiner": "오늘의 한마디",
+ "fillerCount": int, "silenceCount": int,
+ "highlightQuote": "플레이어 명대사", "highlightContext": "그 순간 설명"}''';
 
   final raw = await llm.chatStream(
     [LlmMessage(role: 'user', content: prompt)],
+    task: 'final_judge',
     temperature: 0.2,
     maxOutputTokens: 1024,
   ).join();

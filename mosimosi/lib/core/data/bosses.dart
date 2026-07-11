@@ -5,8 +5,12 @@ import '../models/boss.dart';
 final List<Boss> bossesSeed = [
   const Boss(
     id: 'chicken',
+    number: 1,
     name: '무던한 치킨집 사장님',
     subtitle: '입문 보스 · 배달 주문 · 제한 시간 03:00',
+    quote: '네~ 천천히 말씀하세요.',
+    tier: BossTier.normal,
+    difficultyLevel: 1,
     portraitSyllable: '치',
     scenario: '저녁으로 치킨을 배달 주문하세요. 메뉴·주소·요청사항을 빠짐없이 전달하면 클리어.',
     personaPrompt: '''
@@ -28,8 +32,12 @@ final List<Boss> bossesSeed = [
   ),
   const Boss(
     id: 'dental',
+    number: 2,
     name: '따발총 치과 접수원',
     subtitle: '중급 보스 · 진료 예약 · 제한 시간 03:00',
+    quote: '3초에 한 문장, 숨 쉴 틈 없음.',
+    tier: BossTier.rare,
+    difficultyLevel: 3,
     portraitSyllable: '따',
     scenario: '치과 진료 예약을 잡으세요. 접수원의 빠른 돌발 질문 2개 이상을 침착하게 처리하면 클리어.',
     personaPrompt: '''
@@ -52,8 +60,12 @@ final List<Boss> bossesSeed = [
   ),
   const Boss(
     id: 'refund',
+    number: 8,
     name: '환불 불가 3연벙 상담원',
     subtitle: '최종 보스 · 급배송 고객센터 · 제한 시간 03:00',
+    quote: '환불은 안 됩니다. 규정이에요.',
+    tier: BossTier.legend,
+    difficultyLevel: 5,
     portraitSyllable: '환',
     scenario: '불량 상품의 환불을 받아내세요. 상담원은 무조건 규정을 내세워 거절합니다. 환불 또는 동등 보상을 확보하면 클리어.',
     personaPrompt: '''

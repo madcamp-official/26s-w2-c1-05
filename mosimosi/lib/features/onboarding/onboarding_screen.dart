@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/local_store.dart';
 import '../../platform/stt_factory.dart';
+import '../../services/game_server_client.dart';
 import '../../ui/breakpoints.dart';
+import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
-/// 0. 온보딩 (IA 0.1 소개 → 0.2 마이크 권한+STT 준비 → 0.3 닉네임).
-/// 닉네임 저장 등 영속화는 미구현 — 화면 플로우만. STT 준비 버튼은 실제
-/// 권한 요청(SttEngine.initialize)을 수행한다.
+/// 0. 온보딩 (3단계) — 디자인 K 섹션 이식: 컨셉 → 마이크 권한 → 닉네임.
+/// 닉네임 확정 시 POST /users → user_id 로컬 저장 (Phase 2 §2).
+/// 이미 계정이 있으면(설정 '온보딩 다시 보기' 재진입) 서버 호출 없이 통과.
+/// '마이크 허용'은 실제 권한 요청(SttEngine.initialize)을 수행하고,
+/// 데스크톱 2단계는 연결 체크리스트 표시.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -19,7 +24,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
   int _index = 0;
   bool? _sttReady; // null = 미확인
-  final _nickname = TextEditingController();
+  late final TextEditingController _nickname =
+      TextEditingController(text: LocalStore.instance.nickname ?? '민준');
+  bool _submitting = false;
+  String? _nicknameError;
 
   @override
   void dispose() {
@@ -28,17 +36,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  Future<void> _checkStt() async {
-    final ok = await createSttEngine().initialize();
-    if (mounted) setState(() => _sttReady = ok);
+  void _next() =>
+      _page.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+
+  /// 닉네임 확정 → 계정 생성 → 첫 보스 브리핑으로.
+  Future<void> _submitNickname() async {
+    if (_submitting) return;
+    // 재진입(온보딩 다시 보기): 계정 유지, 서버 호출 없이 통과.
+    // (닉네임 변경 API는 없음 — 변경은 서버 PATCH 추가 후.)
+    if (LocalStore.instance.hasUser) {
+      context.go('/bosses/chicken');
+      return;
+    }
+    final nickname = _nickname.text.trim();
+    if (nickname.isEmpty) {
+      setState(() => _nicknameError = '닉네임을 입력해 주세요');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _nicknameError = null;
+    });
+    try {
+      final res =
+          await GameServerClient().postJson('/users', {'nickname': nickname});
+      await LocalStore.instance
+          .saveUser(userId: res['id'] as String, nickname: nickname);
+      if (mounted) context.go('/bosses/chicken');
+    } on GameServerException catch (e) {
+      if (mounted) {
+        setState(() => _nicknameError =
+            e.statusCode == 409 ? '이미 사용 중인 닉네임이에요' : '서버 오류 — 잠시 후 다시 시도해 주세요');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _nicknameError = '서버에 연결할 수 없어요 — 네트워크를 확인해 주세요');
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
-  void _next() {
-    if (_index < 2) {
-      _page.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
-    } else {
-      context.go('/home');
-    }
+  Future<void> _requestMic() async {
+    final ok = await createSttEngine().initialize();
+    if (!mounted) return;
+    setState(() => _sttReady = ok);
+    _next();
   }
 
   @override
@@ -47,35 +90,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              children: [
-                Expanded(
-                  child: PageView(
-                    controller: _page,
-                    onPageChanged: (i) => setState(() => _index = i),
-                    children: [_intro(), _micSetup(), _nicknamePage()],
-                  ),
-                ),
-                _dots(),
-                Padding(
-                  padding: const EdgeInsets.all(YbsSpace.s5),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: YbsColor.go500,
-                        foregroundColor: YbsColor.textOnGo,
-                        minimumSize: const Size.fromHeight(YbsSpace.hitCall - 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YbsRadius.md)),
-                      ),
-                      onPressed: _next,
-                      child: Text(_index == 2 ? '시작하기' : '다음',
-                          style: const TextStyle(fontSize: YbsType.bodyLg, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ),
-              ],
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: PageView(
+              controller: _page,
+              onPageChanged: (i) => setState(() => _index = i),
+              children: [_concept(), _micPage(), _nicknamePage()],
             ),
           ),
         ),
@@ -83,153 +102,237 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _dots() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var i = 0; i < 3; i++)
-          Container(
-            width: i == _index ? 20 : 7,
-            height: 7,
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(
-              color: i == _index ? YbsColor.go500 : YbsColor.ink600,
-              borderRadius: BorderRadius.circular(YbsRadius.full),
+  // ---- 공통 하단 (dots + CTA) ----
+  Widget _footer({required String cta, required VoidCallback onTap, String? caption}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s6, 0, YbsSpace.s6, 30),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < 3; i++)
+                Container(
+                  width: i == _index ? 20 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: i == _index ? YbsColor.go500 : YbsColor.ink600,
+                    borderRadius: BorderRadius.circular(YbsRadius.full),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: YbsSpace.s4),
+          YbsButton(label: cta, size: YbsButtonSize.lg, fullWidth: true, onTap: onTap),
+          if (caption != null) ...[
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(caption, style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _heroCircle({required IconData icon, required Color accent, required Color border}) {
+    return Container(
+      width: 110,
+      height: 110,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: YbsColor.surfaceInset,
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.24),
+          radius: 0.72,
+          colors: [accent.withValues(alpha: 0.25), Colors.transparent],
+        ),
+        border: Border.all(color: border, width: 2),
+        boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.4), blurRadius: 28)],
+      ),
+      child: Icon(icon, size: 40, color: accent),
+    );
+  }
+
+  // ---- 1/3 컨셉 ----
+  Widget _concept() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.4),
+          radius: 0.9,
+          colors: [YbsColor.live500.withValues(alpha: 0.10), Colors.transparent],
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _heroCircle(icon: Icons.call, accent: YbsColor.live400, border: YbsColor.live600),
+                const SizedBox(height: YbsSpace.s6),
+                const Text('전화가 무서운 건\n당신 탓이 아니에요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: YbsType.display, fontSize: 38, height: 1.2, color: YbsColor.white)),
+                const SizedBox(height: YbsSpace.s3),
+                const Text('AI 진상 보스에게 전화를 걸어\n게임처럼 연습하세요. 진짜 전화는 아니에요.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, height: 1.6, color: YbsColor.textSub)),
+              ],
             ),
           ),
+          _footer(cta: '시작하기', onTap: _next),
+        ],
+      ),
+    );
+  }
+
+  // ---- 2/3 마이크 권한 (+데스크톱 STT 체크) ----
+  Widget _micPage() {
+    final desktop = isDesktop(context);
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _heroCircle(icon: Icons.mic, accent: YbsColor.go400, border: YbsColor.go600),
+              const SizedBox(height: YbsSpace.s6),
+              Text(desktop ? '목소리가 게임 컨트롤러예요' : '목소리가\n게임 컨트롤러예요',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, height: 1.25, color: YbsColor.white)),
+              const SizedBox(height: YbsSpace.s3),
+              const Text('통화 연습에 마이크가 필요해요.\n녹음은 리포트 생성에만 쓰고 바로 지워요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, height: 1.6, color: YbsColor.textSub)),
+              if (desktop) ...[
+                const SizedBox(height: YbsSpace.s6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s6),
+                  child: _desktopCheckCard(),
+                ),
+              ],
+            ],
+          ),
+        ),
+        _footer(cta: desktop ? '다음' : '마이크 허용', onTap: _requestMic, caption: '설정에서 언제든 바꿀 수 있어요'),
       ],
     );
   }
 
-  // ---- 0.1 소개 ----
-  Widget _intro() {
-    Widget feature(IconData icon, Color color, String title, String desc) => Padding(
-          padding: const EdgeInsets.only(bottom: YbsSpace.s4),
-          child: Row(
-            children: [
+  Widget _desktopCheckCard() {
+    Widget row(bool? ok, String text, {Widget? trailing}) => Padding(
+          padding: const EdgeInsets.only(bottom: YbsSpace.s3 + 2),
+          child: Row(children: [
+            if (ok == true)
+              const Icon(Icons.check, size: 18, color: YbsColor.go400)
+            else
               Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(YbsRadius.sm),
-                  border: Border.all(color: color.withValues(alpha: 0.5)),
-                ),
-                child: Icon(icon, size: 22, color: color),
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: YbsColor.ink500, width: 2)),
               ),
-              const SizedBox(width: YbsSpace.s4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: YbsType.bodyMd, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                    Text(desc, style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
-                  ],
-                ),
-              ),
-            ],
+            const SizedBox(width: YbsSpace.s3),
+            Expanded(
+              child: Text(text,
+                  style: TextStyle(fontSize: YbsType.sub, color: ok == true ? YbsColor.textBody : YbsColor.textSub)),
+            ),
+            ?trailing,
+          ]),
+        );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 + 2, YbsSpace.s5, YbsSpace.s1),
+      decoration: BoxDecoration(
+        color: YbsColor.surfaceCard,
+        border: Border.all(color: YbsColor.borderSoft),
+        borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+      ),
+      child: Column(children: [
+        row(_sttReady, '마이크 감지 ${_sttReady == null ? "— 아래 버튼으로 확인" : _sttReady! ? "됨" : "실패"}'),
+        row(_sttReady, '음성 인식 서버 연결${_sttReady == true ? "됨" : " 확인 대기"}',
+            trailing: _sttReady == true
+                ? const Text('OK',
+                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.go400))
+                : null),
+        row(null, '「여보세요」라고 말해 보세요 — 인식 테스트'),
+      ]),
+    );
+  }
+
+  // ---- 3/3 닉네임 ----
+  Widget _nicknamePage() {
+    Widget chip(String label) => GestureDetector(
+          onTap: () => setState(() => _nickname.text = label),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              border: Border.all(color: YbsColor.borderSoft),
+              borderRadius: BorderRadius.circular(YbsRadius.full),
+            ),
+            child: Text(label, style: const TextStyle(fontSize: 13, color: YbsColor.textSub)),
           ),
         );
 
-    return Padding(
-      padding: const EdgeInsets.all(YbsSpace.s6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('여보세요',
-              style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.poster, color: YbsColor.textHero)),
-          const SizedBox(height: YbsSpace.s2),
-          const Text('전화가 무서운 당신을 위한\n실전 트레이닝 게임',
-              style: TextStyle(fontSize: YbsType.bodyLg, height: 1.4, color: YbsColor.textSub)),
-          const SizedBox(height: YbsSpace.s10),
-          feature(Icons.sports_kabaddi, YbsColor.live400, '전화 보스전', 'AI 진상 보스와 통화로 맞붙어요'),
-          feature(Icons.bolt, YbsColor.go400, '실시간 전화 배틀', '다른 유저와 1:1 민원 대결'),
-          feature(Icons.receipt_long, YbsColor.gold400, '말하기 리포트', '판이 끝나면 AI가 화법을 코칭'),
-        ],
-      ),
-    );
-  }
-
-  // ---- 0.2 마이크 권한 + STT 준비 ----
-  Widget _micSetup() {
-    final desktop = isDesktop(context);
-    final (statusText, statusColor) = switch (_sttReady) {
-      null => ('아래 버튼을 눌러 준비 상태를 확인하세요', YbsColor.textFaint),
-      true => ('준비 완료! 음성 인식을 쓸 수 있어요', YbsColor.go400),
-      false => ('음성 인식 불가 — 통화에서 텍스트 입력으로 진행돼요', YbsColor.amber400),
-    };
-    return Padding(
-      padding: const EdgeInsets.all(YbsSpace.s6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(desktop ? '서버 음성 인식 연결' : '마이크 준비',
-              style: const TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, color: YbsColor.textHero)),
-          const SizedBox(height: YbsSpace.s2),
-          Text(
-            desktop ? '데스크톱은 서버 STT를 사용해요.\n연결 상태를 확인할게요.' : '통화는 음성으로 진행돼요.\n마이크 권한이 필요해요.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.textSub),
-          ),
-          const SizedBox(height: YbsSpace.s10),
-          GestureDetector(
-            onTap: _checkStt,
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: YbsColor.go500.withValues(alpha: 0.10),
-                border: Border.all(color: _sttReady == false ? YbsColor.amber400 : YbsColor.go600, width: 2),
-                boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 30)],
-              ),
-              child: Icon(
-                _sttReady == true ? Icons.check : Icons.mic,
-                size: 40,
-                color: _sttReady == false ? YbsColor.amber400 : YbsColor.go400,
-              ),
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('뭐라고 부를까요?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, height: 1.25, color: YbsColor.white)),
+                const SizedBox(height: YbsSpace.s3),
+                const Text('배틀에서 상대에게 보여지는 이름이에요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, height: 1.6, color: YbsColor.textSub)),
+                const SizedBox(height: YbsSpace.s6),
+                Container(
+                  height: 60,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  decoration: BoxDecoration(
+                    color: YbsColor.surfaceInset,
+                    border: Border.all(color: YbsColor.go600),
+                    borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+                    boxShadow: [BoxShadow(color: YbsColor.go500.withValues(alpha: 0.10), blurRadius: 16)],
+                  ),
+                  child: Center(
+                    child: TextField(
+                      controller: _nickname,
+                      maxLength: 12,
+                      style: const TextStyle(fontSize: YbsType.bodyLg, fontWeight: FontWeight.w700, color: YbsColor.textHero),
+                      cursorColor: YbsColor.go400,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        counterText: '',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: YbsSpace.s2 + 2),
+                Text(_nicknameError ?? '배틀과 랭킹에서 쓸 이름이에요',
+                    style: TextStyle(
+                        fontSize: YbsType.micro,
+                        color: _nicknameError == null ? YbsColor.go400 : YbsColor.live400)),
+                const SizedBox(height: YbsSpace.s5),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: YbsSpace.s2,
+                  runSpacing: YbsSpace.s2,
+                  children: [chip('환불전사'), chip('통화의신'), chip('여보세요고수')],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: YbsSpace.s5),
-          Text(statusText, textAlign: TextAlign.center, style: TextStyle(fontSize: YbsType.sub, color: statusColor)),
-        ],
-      ),
-    );
-  }
-
-  // ---- 0.3 닉네임 ----
-  Widget _nicknamePage() {
-    return Padding(
-      padding: const EdgeInsets.all(YbsSpace.s6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('뭐라고 불러드릴까요?',
-              style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, color: YbsColor.textHero)),
-          const SizedBox(height: YbsSpace.s2),
-          const Text('배틀 상대와 랭킹에 표시될 이름이에요.',
-              style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
-          const SizedBox(height: YbsSpace.s8),
-          TextField(
-            controller: _nickname,
-            maxLength: 12,
-            style: const TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textHero),
-            decoration: InputDecoration(
-              hintText: '예: 환불전사_수원',
-              hintStyle: const TextStyle(color: YbsColor.textFaint),
-              counterStyle: const TextStyle(color: YbsColor.textFaint),
-              filled: true,
-              fillColor: YbsColor.surfaceCard,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(YbsRadius.md),
-                borderSide: const BorderSide(color: YbsColor.borderSoft),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+        _footer(
+            cta: _submitting ? '계정 만드는 중…' : '첫 보스에게 전화 걸기',
+            onTap: _submitNickname),
+      ],
     );
   }
 }

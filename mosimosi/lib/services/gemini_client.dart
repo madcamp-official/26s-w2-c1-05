@@ -29,6 +29,7 @@ class GeminiClient implements LlmClient {
   @override
   Stream<String> chatStream(
     List<LlmMessage> messages, {
+    String task = 'boss_turn', // 직접 호출 시 무시 (분기는 서버 프록시 몫)
     double? temperature,
     int? maxOutputTokens,
   }) async* {

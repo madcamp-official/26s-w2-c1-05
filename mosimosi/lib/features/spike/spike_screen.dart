@@ -6,8 +6,8 @@ import '../../platform/stt_engine.dart';
 import '../../platform/stt_factory.dart';
 import '../../platform/tts_engine.dart';
 import '../../platform/tts_factory.dart';
-import '../../services/gemini_client.dart';
 import '../../services/llm_client.dart';
+import '../../services/llm_factory.dart';
 
 /// Day 1 스파이크 (FSD §5): push-to-talk → STT → LLM 스트리밍 → 문장 큐 TTS.
 /// 버튼 뗀 시점 → 첫 TTS 발성 시점 지연(ms)을 측정해 표시. 성공 기준 ≤1.5s.
@@ -20,8 +20,6 @@ class SpikeScreen extends StatefulWidget {
 
 const _systemPrompt =
     '너는 치과 접수원이야. 반드시 1~2문장의 짧은 한국어 구어체로만 응답해.';
-
-const _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
 class _Turn {
   _Turn(this.speaker, this.text);
@@ -57,7 +55,7 @@ class _SpikeScreenState extends State<SpikeScreen> {
   void initState() {
     super.initState();
     _tts = createTtsEngine();
-    _llm = GeminiClient(apiKey: _geminiApiKey);
+    _llm = createLlmClient(); // 프록시 경유 (규칙 #4) — 보스 대화는 vLLM으로
     _stt = createSttEngine();
     _sttSub = _stt.results.listen(_onSttResult);
     _initStt();

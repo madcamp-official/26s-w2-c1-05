@@ -110,7 +110,7 @@ class _PhoneBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: YbsColor.bgApp,
+      color: YbsColor.bgIncall,
       child: Column(
         children: [
           if (!state._isPlayer) _spectatorHeader(),
@@ -132,7 +132,7 @@ class _PhoneBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5, vertical: 9),
       decoration: const BoxDecoration(
         color: YbsColor.surfaceInset,
-        border: Border(bottom: BorderSide(color: YbsColor.borderSoft)),
+        border: Border(bottom: BorderSide(color: YbsColor.borderIncall)),
       ),
       child: Text.rich(
         TextSpan(children: [
@@ -390,7 +390,7 @@ class _PhoneBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3 - 2, YbsSpace.s5, YbsSpace.s6 + 2),
       decoration: const BoxDecoration(
         color: Color(0x59000000),
-        border: Border(top: BorderSide(color: YbsColor.borderSoft)),
+        border: Border(top: BorderSide(color: YbsColor.borderIncall)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -416,7 +416,7 @@ class _PhoneBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s5),
       decoration: const BoxDecoration(
         color: Color(0x59000000),
-        border: Border(top: BorderSide(color: YbsColor.borderSoft)),
+        border: Border(top: BorderSide(color: YbsColor.borderIncall)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
