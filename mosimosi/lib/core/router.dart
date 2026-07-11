@@ -15,6 +15,7 @@ import '../features/history/session_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/spike/spike_screen.dart';
 
 /// IA §8 라우트 구조. 데스크톱/모바일 동일 라우트, 레이아웃만 폼팩터 분기.
 /// TODO: 통화 라우트 직접 진입 시 세션 유효성 검사 → 무효면 브리핑 리다이렉트.
@@ -90,6 +91,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
+    ),
+    // Day 1 스파이크 (음성 파이프라인 검증용 임시 라우트).
+    GoRoute(
+      path: '/spike',
+      builder: (context, state) => const SpikeScreen(),
     ),
   ],
 );

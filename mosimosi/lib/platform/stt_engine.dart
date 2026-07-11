@@ -15,6 +15,10 @@ class SttResult {
 
 abstract class SttEngine {
   Stream<SttResult> get results; // SttResult{text, isFinal, tStartMs}
+
+  /// 엔진 준비(권한 요청 포함). 사용 가능 여부를 반환. 온보딩 0.2에서도 사용.
+  Future<bool> initialize();
+
   Future<void> start();
   Future<void> stop();
   bool get isAvailable; // false면 UI가 텍스트 입력 폴백 표시
