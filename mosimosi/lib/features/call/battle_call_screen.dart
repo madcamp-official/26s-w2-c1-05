@@ -1,20 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../platform/stt_engine.dart';
+import '../../platform/stt_factory.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
+import '../battle/battle_room.dart';
 import 'call_desktop.dart';
 
-/// 3.3 배틀 통화 화면 ★막다른 방 — B-lite 텍스트 릴레이, 상대 발화 TTS 재생.
-/// 프로토타입 BattlePhone.dc.html + InCallDesktopScreen.jsx 이식.
-///
-/// 가정 (핸드오프 Questions policy):
-/// - STT/LLM/WebSocket 미연동. 상태는 목(mock). 마이크 상태 pill을 탭하면
-///   player·상담원 → player·민원인 → spectator 순으로 순환한다(세 변형 검수용).
-/// - 비밀 목표·AI 코치는 접이식 칩 '표면'만 구현(펼침 패널·실제 데이터 없음).
-///   비밀 정보는 서버가 자기 몫만 전송한다는 규칙(Instructions #2)은 배선 단계 사안.
-/// - 애니메이션(펄스/이퀄라이저/셰이크)은 스코프 밖 → 정지 상태만.
+/// 3.3 배틀 통화 화면 ★막다른 방 — B-lite 텍스트 릴레이(Phase 3 실배선).
+/// 내 STT 확정 텍스트 → /ws/room utterance → 서버 브로드캐스트가 단일 진실
+/// (양측 순서 일치), 상대 발화 수신 시 TtsEngine 재생. STT 불가 시 텍스트 폴백.
+/// 기세 게이지는 인크리멘탈 심판(P1) 전까지 중립 고정, 관전 시점은 watch 화면 몫.
 class BattleCallScreen extends StatefulWidget {
   const BattleCallScreen({super.key, required this.roomId});
 
@@ -24,128 +24,152 @@ class BattleCallScreen extends StatefulWidget {
   State<BattleCallScreen> createState() => _BattleCallScreenState();
 }
 
-enum _View { playerAgent, playerClaimant, spectator }
-
-class _Caption {
-  const _Caption(this.speaker, this.name, this.text, {this.active = false, this.dim = false});
-  final CaptionSpeaker speaker;
-  final String name;
-  final String text;
-  final bool active;
-  final bool dim;
-}
-
 class _BattleCallScreenState extends State<BattleCallScreen> {
-  final _name = '민준';
-  final _opp = '환불전사_수원';
+  BattleRoomController? _room;
+  SttEngine? _stt;
+  StreamSubscription<SttResult>? _sttSub;
+  Timer? _clock; // 통화 시간 표시용 1초 틱
 
-  _View _view = _View.playerAgent;
+  bool _sttAvailable = false;
+  bool _listening = false;
+  bool _awaitingFinal = false;
+  String _interim = '';
+  int _pttAtMs = 0; // PTT 누른 시점 (통화 시작 기준 ms — 규칙 #3)
+  bool _secretOpen = false;
+  bool _navigated = false;
+  final _fallbackController = TextEditingController();
 
-  void _cycleView() {
-    setState(() {
-      _view = switch (_view) {
-        _View.playerAgent => _View.playerClaimant,
-        _View.playerClaimant => _View.spectator,
-        _View.spectator => _View.playerAgent,
-      };
+  @override
+  void initState() {
+    super.initState();
+    final room = BattleRoomController.of(widget.roomId);
+    _room = room;
+    if (room == null) return;
+    room.addListener(_onRoom);
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && room.inCall) setState(() {});
+    });
+    final stt = createSttEngine();
+    _stt = stt;
+    _sttSub = stt.results.listen(_onSttResult);
+    stt.initialize().then((ok) {
+      if (mounted) setState(() => _sttAvailable = ok);
     });
   }
 
-  bool get _isPlayer => _view != _View.spectator;
-  bool get _meAgent => _view != _View.playerClaimant; // spectator는 상담원 시점 관전
-  String get _myRole => _meAgent ? '상담원' : '민원인';
-  String get _oppRole => _meAgent ? '민원인' : '상담원';
-  String get _mySide => _isPlayer ? '나' : _name;
-  String get _myLabel => '$_mySide · $_myRole';
-  String get _oppLabel => '$_opp · $_oppRole';
-  String get _scoreLine => _meAgent ? 'MOMENTUM 46 : 54' : 'MOMENTUM 54 : 46';
-  bool get _losing => _meAgent;
-  double get _greenFraction => _meAgent ? 0.46 : 0.54;
-  String get _micLabel => _isPlayer ? '마이크 켜짐 · 자유 대화' : '말하는 중';
-
-  List<_Caption> get _captions {
-    // owner 기준 원본 대화 → 내 시점(mine)이면 오른쪽(player), 아니면 왼쪽(boss).
-    const lines = [
-      ('claimant', '3주째 환불 처리가 안 되고 있잖아요. 오늘은 답을 듣고 끊을 거예요.', false),
-      ('agent', '많이 답답하셨겠어요. 어떤 부분이 제일 불편하셨는지 여쭤봐도 될까요?', false),
-      ('claimant', '말 돌리지 마세요. 소비자원에 신고하기 전에 환불해 주세요.', true),
-    ];
-    return [
-      for (var i = 0; i < lines.length; i++)
-        () {
-          final (owner, text, active) = lines[i];
-          final mine = (owner == 'agent') == _meAgent;
-          return _Caption(
-            mine ? CaptionSpeaker.player : CaptionSpeaker.boss,
-            mine ? _mySide : _opp,
-            text,
-            active: active,
-            dim: i < lines.length - 1,
-          );
-        }(),
-    ];
+  void _onRoom() {
+    final room = _room!;
+    if (room.ended && !_navigated) {
+      _navigated = true; // judging 진입 즉시 결과 화면 (스피너 → verdict)
+      if (mounted) context.go('/battle/${widget.roomId}/result');
+      return;
+    }
+    if (mounted) setState(() {});
   }
 
   @override
+  void dispose() {
+    _clock?.cancel();
+    _sttSub?.cancel();
+    _stt?.stop();
+    _room?.removeListener(_onRoom);
+    _fallbackController.dispose();
+    super.dispose();
+  }
+
+  // ================================================================ PTT
+  Future<void> _pressTalk() async {
+    final room = _room;
+    if (!_sttAvailable || room == null || !room.inCall) return;
+    _pttAtMs = room.elapsedMs;
+    _awaitingFinal = false;
+    setState(() {
+      _listening = true;
+      _interim = '';
+    });
+    await _stt!.start();
+  }
+
+  Future<void> _releaseTalk() async {
+    if (!_listening) return;
+    setState(() => _listening = false);
+    _awaitingFinal = true;
+    await _stt!.stop();
+  }
+
+  void _onSttResult(SttResult r) {
+    if (!mounted) return;
+    if (r.isFinal) {
+      setState(() => _interim = '');
+      if (_awaitingFinal) {
+        _awaitingFinal = false;
+        _room?.sendUtterance(r.text, tStartMs: _pttAtMs);
+      }
+    } else {
+      setState(() => _interim = r.text);
+    }
+  }
+
+  void _sendFallback() {
+    final room = _room;
+    final text = _fallbackController.text.trim();
+    if (text.isEmpty || room == null || !room.inCall) return;
+    _fallbackController.clear();
+    room.sendUtterance(text, tStartMs: room.elapsedMs);
+  }
+
+  // ================================================================ build
+  @override
   Widget build(BuildContext context) {
-    final phone = _PhoneBody(state: this);
-    if (isDesktop(context)) {
+    final room = _room;
+    if (room == null) {
       return Scaffold(
-        body: buildCallDesktopStage(
-          phone: phone,
-          rightLabel: _opp,
-          momentum: _greenFraction,
-          mission: "상담원이 먼저 '죄송합니다'라고 말하게 만드세요.",
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('배틀 세션이 만료됐어요', style: TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
+              const SizedBox(height: YbsSpace.s4),
+              YbsButton(label: '다시 매칭하기', onTap: () => context.go('/battle')),
+            ],
+          ),
         ),
       );
     }
-    return Scaffold(body: SafeArea(bottom: false, child: phone));
+    final phone = _phoneBody(room);
+    return PopScope(
+      canPop: false, // 막다른 방 — 이탈은 종료 버튼으로만
+      child: isDesktop(context)
+          ? Scaffold(
+              body: buildCallDesktopStage(
+                phone: phone,
+                rightLabel: room.match.opponentNickname,
+                momentum: 0.5, // 실시간 기세는 인크리멘탈 심판(P1) 몫 — 중립 고정
+                mission: room.match.secretGoal,
+              ),
+            )
+          : Scaffold(body: SafeArea(bottom: false, child: phone)),
+    );
   }
-}
 
-class _PhoneBody extends StatelessWidget {
-  const _PhoneBody({required this.state});
-  final _BattleCallScreenState state;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _phoneBody(BattleRoomController room) {
     return Container(
       color: YbsColor.bgIncall,
       child: Column(
         children: [
-          if (!state._isPlayer) _spectatorHeader(),
-          _momentumHeader(),
-          _callerBlock(),
-          if (state._isPlayer) _ruleFiredCard(),
-          if (state._isPlayer) _chips(),
-          Expanded(child: _captionList()),
-          _micStatus(),
-          state._isPlayer ? _playerControls(context) : _spectatorFooter(),
+          _momentumHeader(room),
+          _callerBlock(room),
+          _secretChip(room),
+          Expanded(child: _captionList(room)),
+          _micStatus(room),
+          if (room.state == 'disconnected') _disconnectedBar() else _playerControls(room),
         ],
       ),
     );
   }
 
-  Widget _spectatorHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5, vertical: 9),
-      decoration: const BoxDecoration(
-        color: YbsColor.surfaceInset,
-        border: Border(bottom: BorderSide(color: YbsColor.borderIncall)),
-      ),
-      child: Text.rich(
-        TextSpan(children: [
-          TextSpan(text: state._name, style: const TextStyle(fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-          TextSpan(text: ' · ${state._myRole} 화면'),
-        ]),
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub),
-      ),
-    );
-  }
-
-  Widget _momentumHeader() {
+  Widget _momentumHeader(BattleRoomController room) {
+    final match = room.match;
     return Padding(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 - 2, YbsSpace.s5, 0),
       child: Column(
@@ -154,16 +178,16 @@ class _PhoneBody extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(state._myLabel,
+                child: Text('나 · ${match.roleLabel}',
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go400)),
               ),
               const SizedBox(width: YbsSpace.s2),
-              Text(state._scoreLine,
+              Text('판정은 통화 종료 후',
                   style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(11), color: YbsColor.textFaint)),
               const SizedBox(width: YbsSpace.s2),
               Expanded(
-                child: Text(state._oppLabel,
+                child: Text('${match.opponentNickname} · ${match.opponentRoleLabel}',
                     maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right,
                     style: const TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.live400)),
               ),
@@ -171,26 +195,12 @@ class _PhoneBody extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           _tugBar(),
-          if (state._losing)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.south, size: 11, color: YbsColor.live400),
-                    SizedBox(width: 5),
-                    Text('밀리는 중 −4',
-                        style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w700, color: YbsColor.live400)),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
+  /// 실시간 기세 미지원(P1) — 중립 50:50 표시.
   Widget _tugBar() {
     return SizedBox(
       height: 12,
@@ -204,7 +214,7 @@ class _PhoneBody extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
-              widthFactor: state._greenFraction,
+              widthFactor: 0.5,
               child: Container(
                 decoration: BoxDecoration(
                   color: YbsColor.go500,
@@ -215,7 +225,7 @@ class _PhoneBody extends StatelessWidget {
             ),
           ),
           Align(
-            alignment: Alignment(state._greenFraction * 2 - 1, 0),
+            alignment: Alignment.center,
             child: Container(width: 3, height: 12, decoration: BoxDecoration(color: YbsColor.white, borderRadius: BorderRadius.circular(2))),
           ),
         ],
@@ -223,7 +233,9 @@ class _PhoneBody extends StatelessWidget {
     );
   }
 
-  Widget _callerBlock() {
+  Widget _callerBlock(BattleRoomController room) {
+    final limit = 300; // 서버 time_limit_s와 동일 (초과 시 서버가 judging 전환)
+    final remaining = (limit - room.elapsedSeconds).clamp(0, limit);
     return Padding(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 - 2, YbsSpace.s5, 0),
       child: Column(
@@ -237,99 +249,89 @@ class _PhoneBody extends StatelessWidget {
             ],
           ),
           const SizedBox(height: YbsSpace.s2),
-          const CallTimer(seconds: 72, tone: TimerTone.normal, label: '라운드 1 · 03:00'),
+          CallTimer(
+            seconds: room.elapsedSeconds,
+            tone: remaining <= 30 ? TimerTone.critical : TimerTone.normal,
+            label: '통화 시간 · 제한 05:00',
+          ),
         ],
       ),
     );
   }
 
-  Widget _ruleFiredCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4 - 2, YbsSpace.s5, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3),
-        decoration: BoxDecoration(
-          color: YbsColor.live500.withValues(alpha:0.12),
-          border: Border.all(color: YbsColor.live600),
-          borderRadius: BorderRadius.circular(YbsRadius.md),
-          boxShadow: [BoxShadow(color: YbsColor.live500.withValues(alpha:0.18), blurRadius: 20)],
-        ),
-        child: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, size: 22, color: YbsColor.live400),
-            SizedBox(width: YbsSpace.s3 - 2),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('규칙 발동 — 소비자원 언급', style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, height: 1.3, color: YbsColor.live400)),
-                  Text('접수 의무가 발생했어요. 접수 절차를 먼저 안내하세요.', style: TextStyle(fontSize: YbsType.micro, height: 1.4, color: YbsColor.textSub)),
+  /// 비밀 목표 접이식 칩 — 내 몫만 (규칙 #2). 펼치면 목표(+규칙 카드) 표시.
+  Widget _secretChip(BattleRoomController room) {
+    final match = room.match;
+    if (!_secretOpen) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
+        child: Center(
+          child: GestureDetector(
+            onTap: () => setState(() => _secretOpen = true),
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4 - 2),
+              decoration: BoxDecoration(
+                color: YbsColor.go500.withValues(alpha: 0.08),
+                border: Border.all(color: YbsColor.go600),
+                borderRadius: BorderRadius.circular(YbsRadius.full),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.lock_outline, size: 14, color: YbsColor.go300),
+                  SizedBox(width: 7),
+                  Text('비밀 목표', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go300)),
+                  SizedBox(width: 7),
+                  Icon(Icons.keyboard_arrow_down, size: 14, color: YbsColor.go300),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chips() {
-    Widget chip({required Widget leading, required String label, Widget? badge, required Color color, required Color border, required Color bg}) {
-      return Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4 - 2),
-        decoration: BoxDecoration(color: bg, border: Border.all(color: border), borderRadius: BorderRadius.circular(YbsRadius.full)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            leading,
-            const SizedBox(width: 7),
-            Text(label, style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: color)),
-            if (badge != null) ...[const SizedBox(width: 7), badge],
-            const SizedBox(width: 7),
-            Icon(Icons.keyboard_arrow_down, size: 14, color: color),
-          ],
+          ),
         ),
       );
     }
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: YbsSpace.s2 + 2,
-        runSpacing: YbsSpace.s2,
-        children: [
-          chip(
-            leading: const Icon(Icons.lock_outline, size: 14, color: YbsColor.go300),
-            label: '비밀 목표',
-            color: YbsColor.go300,
-            border: YbsColor.go600,
-            bg: YbsColor.go500.withValues(alpha:0.08),
+      child: GestureDetector(
+        onTap: () => setState(() => _secretOpen = false),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3),
+          decoration: BoxDecoration(
+            color: YbsColor.go500.withValues(alpha: 0.06),
+            border: Border.all(color: YbsColor.go600),
+            borderRadius: BorderRadius.circular(YbsRadius.md),
           ),
-          chip(
-            leading: const Text('AI 코치', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.gold300)),
-            label: '',
-            badge: Container(
-              constraints: const BoxConstraints(minWidth: 17),
-              height: 17,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(color: YbsColor.gold400, borderRadius: BorderRadius.circular(YbsRadius.full)),
-              child: const Text('1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: YbsColor.textOnGold)),
-            ),
-            color: YbsColor.gold300,
-            border: YbsColor.gold500,
-            bg: YbsColor.gold400.withValues(alpha:0.10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text('비밀 목표 — 나만 보여요',
+                      style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go300)),
+                  Icon(Icons.keyboard_arrow_up, size: 14, color: YbsColor.go300),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(match.secretGoal,
+                  style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.5, color: YbsColor.textHero)),
+              if (match.ruleCard != null) ...[
+                const SizedBox(height: YbsSpace.s2),
+                Text('규칙 · ${match.ruleCard!}',
+                    style: const TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _captionList() {
-    final caps = state._captions;
-    // 전사 로그는 하단 고정 + 넘치면 스크롤(reverse). 말풍선이 남은 높이를 넘어도 오버플로우 없음.
+  Widget _captionList(BattleRoomController room) {
+    final caps = room.utterances;
+    final showInterim = _listening || _interim.isNotEmpty;
+    // 전사 로그는 하단 고정 + 넘치면 스크롤(reverse).
     return SingleChildScrollView(
       reverse: true,
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s4),
@@ -338,54 +340,75 @@ class _PhoneBody extends StatelessWidget {
         children: [
           for (var i = 0; i < caps.length; i++) ...[
             if (i > 0) const SizedBox(height: YbsSpace.s3),
-            LiveCaption(speaker: caps[i].speaker, name: caps[i].name, text: caps[i].text, active: caps[i].active, dim: caps[i].dim),
+            LiveCaption(
+              speaker: caps[i].fromUserId == room.myUserId ? CaptionSpeaker.player : CaptionSpeaker.boss,
+              name: caps[i].fromUserId == room.myUserId ? '나' : room.match.opponentNickname,
+              text: caps[i].text,
+              active: i == caps.length - 1 && !showInterim,
+              dim: i < caps.length - 1,
+            ),
+          ],
+          if (showInterim) ...[
+            if (caps.isNotEmpty) const SizedBox(height: YbsSpace.s3),
+            LiveCaption(
+              speaker: CaptionSpeaker.player,
+              name: '나',
+              text: _interim.isEmpty ? '…' : _interim,
+              active: true,
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _micStatus() {
+  Widget _micStatus(BattleRoomController room) {
+    final label = !room.inCall
+        ? '연결 중…'
+        : _listening
+            ? '듣는 중 — 떼면 전송'
+            : _sttAvailable
+                ? '버튼을 누르는 동안 말해요'
+                : '텍스트로 말하기 (STT 불가)';
     return Padding(
       padding: const EdgeInsets.only(bottom: YbsSpace.s3),
       child: Center(
-        // 마이크 pill 탭 → 세 변형(player 상담원/민원인, spectator) 순환 (mock).
-        child: GestureDetector(
-          onTap: state._cycleView,
-          child: Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5 - 2),
-            decoration: BoxDecoration(
-              color: YbsColor.go500.withValues(alpha:0.08),
-              border: Border.all(color: YbsColor.go600),
-              borderRadius: BorderRadius.circular(YbsRadius.full),
-              boxShadow: [BoxShadow(color: YbsColor.go500.withValues(alpha:0.12), blurRadius: 18)],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(
-                    4,
-                    (i) => Padding(
-                      padding: EdgeInsets.only(left: i == 0 ? 0 : 2),
-                      child: Container(width: 3, height: 16, decoration: BoxDecoration(color: YbsColor.go400, borderRadius: BorderRadius.circular(2))),
-                    ),
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5 - 2),
+          decoration: BoxDecoration(
+            color: YbsColor.go500.withValues(alpha: 0.08),
+            border: Border.all(color: YbsColor.go600),
+            borderRadius: BorderRadius.circular(YbsRadius.full),
+            boxShadow: [BoxShadow(color: YbsColor.go500.withValues(alpha: 0.12), blurRadius: 18)],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(
+                  4,
+                  (i) => Padding(
+                    padding: EdgeInsets.only(left: i == 0 ? 0 : 2),
+                    child: Container(
+                        width: 3,
+                        height: _listening ? 16 : 8,
+                        decoration: BoxDecoration(color: YbsColor.go400, borderRadius: BorderRadius.circular(2))),
                   ),
                 ),
-                const SizedBox(width: YbsSpace.s3 - 2),
-                Text(state._micLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.go300)),
-              ],
-            ),
+              ),
+              const SizedBox(width: YbsSpace.s3 - 2),
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.go300)),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _playerControls(BuildContext context) {
+  Widget _playerControls(BattleRoomController room) {
     return Container(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3 - 2, YbsSpace.s5, YbsSpace.s6 + 2),
       decoration: const BoxDecoration(
@@ -393,38 +416,92 @@ class _PhoneBody extends StatelessWidget {
         border: Border(top: BorderSide(color: YbsColor.borderIncall)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CallIconButton(icon: Icons.mic, label: '음소거'),
-          const SizedBox(width: YbsSpace.s6 + 2),
-          const CallIconButton(icon: Icons.volume_up, label: '스피커'),
-          const SizedBox(width: YbsSpace.s6 + 2),
           CallIconButton(
-              icon: Icons.call_end,
-              label: '종료',
-              kind: CallButtonKind.endCall,
-              onTap: () => context.go('/battle/${state.widget.roomId}/result')),
+            icon: Icons.call_end,
+            label: '종료',
+            kind: CallButtonKind.endCall,
+            onTap: room.hangUp,
+          ),
+          const SizedBox(width: YbsSpace.s3),
+          Expanded(child: _sttAvailable ? _pttButton(room) : _textFallback(room)),
         ],
       ),
     );
   }
 
-  Widget _spectatorFooter() {
+  Widget _pttButton(BattleRoomController room) {
+    final enabled = room.inCall;
+    return GestureDetector(
+      onTapDown: enabled ? (_) => _pressTalk() : null,
+      onTapUp: enabled ? (_) => _releaseTalk() : null,
+      onTapCancel: enabled ? _releaseTalk : null,
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: enabled ? YbsColor.go500 : YbsColor.ink700,
+          borderRadius: BorderRadius.circular(YbsRadius.lg),
+          border: Border.all(color: enabled ? YbsColor.go600 : YbsColor.borderStrong),
+          boxShadow: enabled ? [BoxShadow(color: YbsColor.goGlow, blurRadius: 24)] : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.mic, size: 24, color: enabled ? YbsColor.textOnGo : YbsColor.textSub),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Text(_listening ? '듣는 중 — 떼면 전송' : '누르는 동안 말하기',
+                style: TextStyle(
+                    fontFamily: YbsType.body,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: enabled ? YbsColor.textOnGo : YbsColor.textSub)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _textFallback(BattleRoomController room) {
+    return SizedBox(
+      height: 76,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _fallbackController,
+              style: const TextStyle(color: YbsColor.textBody),
+              decoration: const InputDecoration(
+                hintText: '음성 인식 불가 — 텍스트로 말하기',
+                hintStyle: TextStyle(color: YbsColor.textFaint),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _sendFallback(),
+            ),
+          ),
+          IconButton(
+            onPressed: _sendFallback,
+            icon: const Icon(Icons.send, color: YbsColor.go400),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _disconnectedBar() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s5),
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s6),
       decoration: const BoxDecoration(
         color: Color(0x59000000),
         border: Border(top: BorderSide(color: YbsColor.borderIncall)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Column(
         children: [
-          Container(width: 7, height: 7, decoration: const BoxDecoration(color: YbsColor.live500, shape: BoxShape.circle)),
-          const SizedBox(width: YbsSpace.s2),
-          Text('SPECTATOR · 실시간 관전',
-              style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(11), color: YbsColor.textFaint)),
+          const Text('서버와 연결이 끊겼어요',
+              style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.live400)),
+          const SizedBox(height: YbsSpace.s3),
+          YbsButton(label: '홈으로', variant: YbsButtonVariant.ghost, onTap: () => context.go('/home')),
         ],
       ),
     );
