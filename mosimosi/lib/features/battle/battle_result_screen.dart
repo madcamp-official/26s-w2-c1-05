@@ -1,14 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
+import 'battle_room.dart';
 
 /// 3.4 판정 대기 + 3.5 배틀 판정 — 디자인 J 섹션 이식.
 /// 탭 A 판정(루브릭) / 탭 B 비밀 공개(페이오프) / 탭 C 내 리포트.
-/// 비주얼 목: 심판·서버 연동은 P1. 2.5초 로딩 연출 후 목 결과.
+/// 실배선: 서버 verdict 브로드캐스트 수신까지 대기 후 실데이터 렌더(Phase 3).
 class BattleResultScreen extends StatefulWidget {
   const BattleResultScreen({super.key, required this.roomId});
 
@@ -19,33 +18,84 @@ class BattleResultScreen extends StatefulWidget {
 }
 
 class _BattleResultScreenState extends State<BattleResultScreen> {
-  bool _judging = true;
+  BattleRoomController? _room;
   int _tab = 0;
 
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 2500), () {
-      if (mounted) setState(() => _judging = false);
-    });
+    _room = BattleRoomController.of(widget.roomId);
+    _room?.addListener(_onRoom);
+  }
+
+  void _onRoom() {
+    if (mounted) setState(() {});
   }
 
   @override
+  void dispose() {
+    _room?.removeListener(_onRoom);
+    super.dispose();
+  }
+
+  void _leave(String location) {
+    BattleRoomController.unregister(widget.roomId); // 방 수명 종료 (WS close)
+    context.go(location);
+  }
+
+  // ---- verdict 접근 헬퍼 (서버 스키마 방어 파싱) ----
+  Map<String, dynamic> get _verdict => _room?.verdict ?? const {};
+
+  Map<String, dynamic> _player(String userId) =>
+      (_verdict['players'] as Map<String, dynamic>?)?[userId] as Map<String, dynamic>? ??
+      const {};
+
+  String get _myId => _room!.myUserId;
+
+  String get _oppId {
+    final players = _verdict['players'] as Map<String, dynamic>? ?? const {};
+    return players.keys.firstWhere((k) => k != _myId, orElse: () => '');
+  }
+
+  int _momentumOf(String userId) =>
+      ((_verdict['momentum'] as Map<String, dynamic>?)?[userId] as num?)?.round() ?? 50;
+
+  @override
   Widget build(BuildContext context) {
-    if (_judging) {
-      // ---- 3.4 판정 대기 ----
-      return const Scaffold(
+    final room = _room;
+    if (room == null) {
+      return Scaffold(
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: YbsColor.gold400),
-              SizedBox(height: YbsSpace.s5),
-              Text('심판이 통화 전체를 검토 중…',
-                  style: TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
-              SizedBox(height: YbsSpace.s2),
-              Text('과정 점수로 판정해요 — 버티기는 안 통해요',
+              const Text('배틀 세션이 만료됐어요', style: TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
+              const SizedBox(height: YbsSpace.s4),
+              YbsButton(label: '홈으로', variant: YbsButtonVariant.ghost, onTap: () => context.go('/home')),
+            ],
+          ),
+        ),
+      );
+    }
+    if (room.verdict == null) {
+      // ---- 3.4 판정 대기 (서버 최종 심판 진행 중) ----
+      final stuck = room.state == 'disconnected';
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!stuck) const CircularProgressIndicator(color: YbsColor.gold400),
+              const SizedBox(height: YbsSpace.s5),
+              Text(stuck ? '서버와 연결이 끊겨 판정을 받지 못했어요' : '심판이 통화 전체를 검토 중…',
+                  style: const TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
+              const SizedBox(height: YbsSpace.s2),
+              const Text('과정 점수로 판정해요 — 버티기는 안 통해요',
                   style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint)),
+              if (stuck) ...[
+                const SizedBox(height: YbsSpace.s5),
+                YbsButton(label: '홈으로', variant: YbsButtonVariant.ghost, onTap: () => _leave('/home')),
+              ],
             ],
           ),
         ),
@@ -67,9 +117,9 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
             ),
             Expanded(
               child: switch (_tab) {
-                0 => _verdictTab(),
-                1 => _secretsTab(),
-                _ => _myReportTab(),
+                0 => _verdictTab(room),
+                1 => _secretsTab(room),
+                _ => _myReportTab(room),
               },
             ),
             Padding(
@@ -80,7 +130,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
                     label: '재매칭',
                     size: YbsButtonSize.lg,
                     fullWidth: true,
-                    onTap: () => context.go('/battle'),
+                    onTap: () => _leave('/battle'),
                   ),
                 ),
                 const SizedBox(width: YbsSpace.s2 + 2),
@@ -91,7 +141,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
                     variant: YbsButtonVariant.ghost,
                     size: YbsButtonSize.lg,
                     fullWidth: true,
-                    onTap: () => context.go('/home'),
+                    onTap: () => _leave('/home'),
                   ),
                 ),
               ]),
@@ -141,23 +191,58 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
           letterSpacing: YbsType.labelTracking(YbsType.micro) / 2,
           color: color));
 
+  List<Widget> _rubricRows(Map<String, dynamic> player) {
+    final rubric = player['rubric'] as List? ?? const [];
+    if (rubric.isEmpty) {
+      return const [Text('루브릭 데이터가 비어 있어요.', style: TextStyle(color: YbsColor.textFaint))];
+    }
+    return [
+      for (final (i, r) in rubric.indexed)
+        if (r is Map<String, dynamic>) ...[
+          if (i > 0) const SizedBox(height: YbsSpace.s4 - 2),
+          RubricScore(
+            label: r['label'] as String? ?? '',
+            score: ((r['score'] as num?)?.round() ?? 0).clamp(0, 5),
+            comment: r['comment'] as String? ?? '',
+          ),
+        ],
+    ];
+  }
+
   // ---- 탭 A 판정 ----
-  Widget _verdictTab() {
+  Widget _verdictTab(BattleRoomController room) {
+    final match = room.match;
+    final winnerId = _verdict['winnerUserId'] as String?;
+    final iWon = winnerId == _myId;
+    final draw = winnerId == null || winnerId.isEmpty;
+    final myMomentum = _momentumOf(_myId);
     return ListView(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s5, YbsSpace.s5, 0),
       children: [
-        const Center(
-          child: VerdictBanner(victory: true, title: '승리', subtitle: '민준 님이 기세 싸움을 가져왔어요'),
+        Center(
+          child: VerdictBanner(
+            victory: iWon,
+            title: draw
+                ? '무승부'
+                : iWon
+                    ? '승리'
+                    : '패배',
+            subtitle: (_verdict['verdictLine'] as String?)?.isNotEmpty == true
+                ? _verdict['verdictLine'] as String
+                : null,
+          ),
         ),
         const SizedBox(height: YbsSpace.s4 + 2),
         Column(children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('나 · 상담원', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go400)),
-              Text('최종 기세 62 : 38',
-                  style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.textSub)),
-              Text('환불전사_수원', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.live400)),
+            children: [
+              Text('나 · ${match.roleLabel}',
+                  style: const TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go400)),
+              Text('최종 기세 $myMomentum : ${100 - myMomentum}',
+                  style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.textSub)),
+              Text(match.opponentNickname,
+                  style: const TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.live400)),
             ],
           ),
           const SizedBox(height: 6),
@@ -168,7 +253,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
               color: YbsColor.live600,
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
-                widthFactor: 0.62,
+                widthFactor: (myMomentum / 100).clamp(0.0, 1.0),
                 child: Container(
                   decoration: BoxDecoration(color: YbsColor.go500, boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 14)]),
                 ),
@@ -178,21 +263,15 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
         ]),
         const SizedBox(height: YbsSpace.s4 + 2),
         _card(children: [
-          _cardLabel('나 · 상담원 루브릭'),
+          _cardLabel('나 · ${match.roleLabel} 루브릭'),
           const SizedBox(height: YbsSpace.s4 - 2),
-          const RubricScore(label: '대안 제시', score: 4, comment: '「부분 환불 + 무료 회수」 — 근거 있는 대안이었어요'),
-          const SizedBox(height: YbsSpace.s4 - 2),
-          const RubricScore(label: '접수 의무 이행', score: 5, comment: '소비자원 언급 직후 「먼저 접수해 드릴게요」 — 규칙 완벽 대응'),
-          const SizedBox(height: YbsSpace.s4 - 2),
-          const RubricScore(label: '감정 관리', score: 3, comment: '01:40 언성이 잠깐 올라갔어요'),
+          ..._rubricRows(_player(_myId)),
         ]),
         const SizedBox(height: YbsSpace.s4 - 2),
         _card(children: [
-          _cardLabel('환불전사_수원 · 민원인 루브릭'),
+          _cardLabel('${match.opponentNickname} · ${match.opponentRoleLabel} 루브릭'),
           const SizedBox(height: YbsSpace.s4 - 2),
-          const RubricScore(label: '근거 없는 거절 압박', score: 4, comment: '「3주째」 반복으로 시간 압박을 잘 썼어요'),
-          const SizedBox(height: YbsSpace.s4 - 2),
-          const RubricScore(label: '상급자 요구 (에스컬레이션)', score: 2, comment: '팀장 연결 요구 타이밍을 놓쳤어요'),
+          ..._rubricRows(_player(_oppId)),
         ]),
         const SizedBox(height: YbsSpace.s4),
       ],
@@ -200,7 +279,11 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
   }
 
   // ---- 탭 B 비밀 공개 ----
-  Widget _secretsTab() {
+  Widget _secretsTab(BattleRoomController room) {
+    final match = room.match;
+    final me = _player(_myId);
+    final opp = _player(_oppId);
+
     Widget resultTag(String label, {required bool good}) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
@@ -215,6 +298,34 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
                   color: good ? YbsColor.go400 : YbsColor.live400)),
         );
 
+    Widget secretCard({
+      required String title,
+      required Color labelColor,
+      required Color? borderColor,
+      required Color bg,
+      required String secret,
+      required bool? achieved,
+      required String note,
+    }) =>
+        _card(
+          border: borderColor,
+          bg: bg,
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Flexible(child: _cardLabel(title, color: labelColor)),
+              if (achieved != null) resultTag(achieved ? '달성' : '실패', good: achieved),
+            ]),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(secret,
+                style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: YbsSpace.s2),
+              Text(note, style: const TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
+            ],
+          ],
+        );
+
+    final keyQuote = _verdict['keyQuote'] as Map<String, dynamic>? ?? const {};
     return ListView(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, 26, YbsSpace.s5, 0),
       children: [
@@ -224,116 +335,98 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
         ),
         const SizedBox(height: 6),
         const Center(
-          child: Text('이제야 보이는 3분의 진실', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+          child: Text('이제야 보이는 진실', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
         ),
         const SizedBox(height: YbsSpace.s5),
-        _card(
-          border: YbsColor.go600,
+        secretCard(
+          title: '나 · ${match.roleLabel}의 비밀 목표',
+          labelColor: YbsColor.go400,
+          borderColor: YbsColor.go600,
           bg: YbsColor.go500.withValues(alpha: 0.06),
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _cardLabel('나 · 상담원의 비밀 목표', color: YbsColor.go400),
-              resultTag('달성 +20', good: true),
-            ]),
-            const SizedBox(height: YbsSpace.s2 + 2),
-            const Text('환불 없이 만족도 3점 이상으로 종료',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-            const SizedBox(height: YbsSpace.s2),
-            const Text('종료 설문 만족도 3점 — 아슬아슬하게 성공',
-                style: TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
-          ],
+          secret: match.secretGoal,
+          achieved: me['goalAchieved'] as bool?,
+          note: me['goalNote'] as String? ?? '',
         ),
+        if (match.ruleCard != null) ...[
+          const SizedBox(height: YbsSpace.s4 - 2),
+          secretCard(
+            title: '나의 규칙 카드',
+            labelColor: YbsColor.live400,
+            borderColor: YbsColor.borderIncall,
+            bg: YbsColor.live500.withValues(alpha: 0.05),
+            secret: match.ruleCard!,
+            achieved: null,
+            note: me['ruleNote'] as String? ?? '',
+          ),
+        ],
         const SizedBox(height: YbsSpace.s4 - 2),
-        _card(
-          border: YbsColor.borderIncall,
-          bg: YbsColor.live500.withValues(alpha: 0.05),
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _cardLabel('나의 규칙 카드 · 발동됨', color: YbsColor.live400),
-              resultTag('대응 성공', good: true),
-            ]),
-            const SizedBox(height: YbsSpace.s2 + 2),
-            const Text('소비자원 신고 언급 시 접수 의무 발생',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-            const SizedBox(height: YbsSpace.s2),
-            const Text('01:12 발동 → 01:26 접수 안내 — 14초 만에 대응',
-                style: TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
-          ],
-        ),
-        const SizedBox(height: YbsSpace.s4 - 2),
-        _card(
-          border: YbsColor.live600,
+        secretCard(
+          title: '${match.opponentNickname} · ${match.opponentRoleLabel}의 비밀 목표',
+          labelColor: YbsColor.live400,
+          borderColor: YbsColor.live600,
           bg: YbsColor.live500.withValues(alpha: 0.06),
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _cardLabel('환불전사_수원 · 민원인의 비밀 목표', color: YbsColor.live400),
-              resultTag('실패', good: false),
-            ]),
-            const SizedBox(height: YbsSpace.s2 + 2),
-            const Text('통화 2분 안에 「전액 환불」 확답 받아내기',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-            const SizedBox(height: YbsSpace.s2),
-            const Text('그래서 초반부터 그렇게 몰아붙였던 거예요',
-                style: TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
-          ],
+          secret: opp['secretGoal'] as String? ?? '(공개 데이터 없음)',
+          achieved: opp['goalAchieved'] as bool?,
+          note: opp['goalNote'] as String? ?? '',
         ),
-        const SizedBox(height: YbsSpace.s4 - 2),
-        _card(children: [
-          _cardLabel('결정적 발언'),
-          const SizedBox(height: 6),
-          const Text('「신고하시기 전에 제가 먼저 접수해 드릴게요. 접수번호 바로 드립니다.」',
-              style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
-          const SizedBox(height: 6),
-          const Text('01:26 · 기세 +12',
-              style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, color: YbsColor.textFaint)),
-        ]),
+        if ((keyQuote['text'] as String?)?.isNotEmpty == true) ...[
+          const SizedBox(height: YbsSpace.s4 - 2),
+          _card(children: [
+            _cardLabel('결정적 발언'),
+            const SizedBox(height: 6),
+            Text('「${keyQuote['text']}」',
+                style: const TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
+            if ((keyQuote['note'] as String?)?.isNotEmpty == true) ...[
+              const SizedBox(height: 6),
+              Text(keyQuote['note'] as String,
+                  style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 11, color: YbsColor.textFaint)),
+            ],
+          ]),
+        ],
         const SizedBox(height: YbsSpace.s4),
       ],
     );
   }
 
   // ---- 탭 C 내 리포트 ----
-  Widget _myReportTab() {
-    Widget stat(String label, String value) => Expanded(
-          child: _card(children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: YbsColor.textFaint)),
-            const SizedBox(height: 2),
-            Text(value,
-                style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 22, fontWeight: FontWeight.w600, height: 1.1, color: YbsColor.go400)),
-          ]),
-        );
+  Widget _myReportTab(BattleRoomController room) {
+    final me = _player(_myId);
+    final improvement = me['improvement'] as Map<String, dynamic>? ?? const {};
+    final keyQuote = _verdict['keyQuote'] as Map<String, dynamic>? ?? const {};
+    final hasAny = improvement.isNotEmpty || (keyQuote['text'] as String?)?.isNotEmpty == true;
     return ListView(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s5, YbsSpace.s5, 0),
       children: [
-        Row(children: [
-          stat('군말', '4회'),
-          const SizedBox(width: YbsSpace.s3),
-          stat('침묵 (2초+)', '1회'),
-        ]),
-        const SizedBox(height: YbsSpace.s4 - 2),
-        _card(children: [
-          _cardLabel('결정적 발언'),
-          const SizedBox(height: 6),
-          const Text('「신고하시기 전에 제가 먼저 접수해 드릴게요. 접수번호 바로 드립니다.」',
-              style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
-          const SizedBox(height: 6),
-          const Text('01:26 · 기세 +12',
-              style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, color: YbsColor.textFaint)),
-        ]),
-        const SizedBox(height: YbsSpace.s4 - 2),
-        _card(
-          border: YbsColor.gold500,
-          bg: YbsColor.gold400.withValues(alpha: 0.05),
-          children: [
-            _cardLabel('이렇게 말했다면', color: YbsColor.gold300),
-            const SizedBox(height: YbsSpace.s2 + 2),
-            const Text('「고객님, 진정하세요.」',
-                style: TextStyle(fontSize: 13, color: YbsColor.textFaint, decoration: TextDecoration.lineThrough)),
-            const SizedBox(height: 4),
-            const Text('→ 「많이 답답하셨겠어요. 지금 바로 확인할게요.」',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.5, color: YbsColor.textBody)),
-          ],
-        ),
+        if (!hasAny)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.only(top: YbsSpace.s6),
+              child: Text('리포트 데이터가 비어 있어요.', style: TextStyle(color: YbsColor.textFaint)),
+            ),
+          ),
+        if ((keyQuote['text'] as String?)?.isNotEmpty == true)
+          _card(children: [
+            _cardLabel('결정적 발언'),
+            const SizedBox(height: 6),
+            Text('「${keyQuote['text']}」',
+                style: const TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
+          ]),
+        if (improvement.isNotEmpty) ...[
+          const SizedBox(height: YbsSpace.s4 - 2),
+          _card(
+            border: YbsColor.gold500,
+            bg: YbsColor.gold400.withValues(alpha: 0.05),
+            children: [
+              _cardLabel('이렇게 말했다면', color: YbsColor.gold300),
+              const SizedBox(height: YbsSpace.s2 + 2),
+              Text('「${improvement['situation'] ?? ''}」',
+                  style: const TextStyle(fontSize: 13, color: YbsColor.textFaint, decoration: TextDecoration.lineThrough)),
+              const SizedBox(height: 4),
+              Text('→ 「${improvement['better'] ?? ''}」',
+                  style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.5, color: YbsColor.textBody)),
+            ],
+          ),
+        ],
         const SizedBox(height: YbsSpace.s4),
       ],
     );
