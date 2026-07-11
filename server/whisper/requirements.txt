@@ -2,3 +2,8 @@ faster-whisper>=1.0.0
 websockets>=12.0
 webrtcvad>=2.0.10
 numpy>=1.24
+# GPU 사용 시(ctranslate2 4.x): 시스템 CUDA가 12가 아니면 아래를 설치하고
+# LD_LIBRARY_PATH를 이 venv의 nvidia/cublas/lib:nvidia/cudnn/lib 로 지정.
+# (systemd 유닛 server/deploy/systemd/yeoboseyo-whisper.service 참고)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12

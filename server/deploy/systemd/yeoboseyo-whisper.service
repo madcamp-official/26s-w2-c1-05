@@ -7,6 +7,9 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/root/server/whisper
+# ctranslate2 4.x는 CUDA 12(libcublas.so.12)·cuDNN 9 필요. 시스템 CUDA는 13이라
+# whisper venv에 pip로 설치한 CUDA 12 라이브러리를 여기서 가리킨다(requirements.txt 참고).
+Environment=LD_LIBRARY_PATH=/root/venvs/whisper/lib/python3.10/site-packages/nvidia/cublas/lib:/root/venvs/whisper/lib/python3.10/site-packages/nvidia/cudnn/lib
 ExecStart=/root/venvs/whisper/bin/python server.py
 Restart=always
 RestartSec=5

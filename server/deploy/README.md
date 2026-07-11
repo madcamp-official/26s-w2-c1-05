@@ -38,6 +38,19 @@ tmux kill-session -t game;  systemctl start yeoboseyo-game
 
 ⚠️ 전환 후에는 `tmux new -s game ...` 재배포 금지(포트 8080 충돌). `systemctl restart`를 쓸 것.
 
+## ⚠️ whisper GPU + CUDA 버전 (중요)
+
+이 박스의 시스템 CUDA는 **13**(libcublas.so.13)인데 ctranslate2 4.x는 **CUDA 12**
+(libcublas.so.12)·cuDNN 9를 요구한다. 그대로 두면 whisper가 모델은 GPU에 올리지만
+전사(encode) 시점에 `RuntimeError: Library libcublas.so.12 is not found`로 크래시한다.
+
+해결: whisper venv에 CUDA 12 라이브러리를 pip 설치하고 유닛의 LD_LIBRARY_PATH로 가리킨다.
+```bash
+/root/venvs/whisper/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+# yeoboseyo-whisper.service의 Environment=LD_LIBRARY_PATH=.../nvidia/cublas/lib:.../nvidia/cudnn/lib
+```
+(대안: CPU 전사 — Environment=WHISPER_DEVICE=cpu, WHISPER_COMPUTE=int8. 느리지만 CUDA 불필요)
+
 ## 상태 확인
 
 ```bash
