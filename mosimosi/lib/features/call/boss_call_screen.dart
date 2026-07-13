@@ -50,7 +50,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
     final session = CallSessionController(
       boss: boss,
       stt: createSttEngine(),
-      tts: createTtsEngine(),
+      tts: createTtsEngine(voicePreset: boss.voicePreset),
       llm: llm,
       generateVariables: () => generateScenarioVariables(llm: llm, boss: boss),
       startServerSession: (variables) async {

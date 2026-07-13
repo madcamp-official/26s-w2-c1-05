@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import 'core/local_store.dart';
 import 'core/router.dart';
@@ -9,6 +10,10 @@ import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // just_audio는 Windows/Linux 기본 구현이 없어 media_kit으로 보강한다.
+  // 기본값이 windows/linux만 켜고 android/iOS/macOS는 그대로 둬서 기존
+  // 네이티브 구현에 영향 없음(패키지 자체 기본 인자 확인 완료).
+  JustAudioMediaKit.ensureInitialized();
   try {
     await dotenv.load(fileName: '.env');
   } catch (_) {
