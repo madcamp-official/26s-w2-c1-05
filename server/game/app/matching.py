@@ -1,15 +1,19 @@
 """매칭 큐 (인메모리, FSD 3.2.1): 1:1 선착순 페어링, 크로스 폼팩터 허용.
 
-클라 → /ws/match?user_id=&nickname=&form_factor= 접속 → 큐 진입.
+클라 → /ws/match?token=&form_factor= 접속 → 큐 진입 (유저는 JWT에서 식별,
+닉네임은 DB 조회 — 클라가 보낸 값을 신뢰하지 않는다).
 2명 모이면 방 생성, 각자에게 자기 몫 브리핑만 전송(규칙 #2).
 30초 폴백(AI 상담원)은 클라 타이머 — 서버는 큐 이탈만 처리.
 """
 
 import asyncio
 import json
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from . import db
+from .auth import user_id_from_token
 from .rooms import create_room
 
 router = APIRouter()
@@ -19,7 +23,16 @@ _lock = asyncio.Lock()
 
 
 @router.websocket("/ws/match")
-async def match_ws(ws: WebSocket, user_id: str, nickname: str = "익명", form_factor: str = "android"):
+async def match_ws(ws: WebSocket, token: str, form_factor: str = "android"):
+    user_id = user_id_from_token(token)
+    if user_id is None:
+        await ws.close(code=4401)
+        return
+    nickname = "익명"
+    if db.pool:
+        row = await db.pool.fetchrow("SELECT nickname FROM users WHERE id=$1", uuid.UUID(user_id))
+        if row and row["nickname"]:
+            nickname = row["nickname"]
     await ws.accept()
     me = {"user_id": user_id, "nickname": nickname, "form_factor": form_factor, "ws": ws}
     async with _lock:

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../core/local_store.dart';
+
 /// 게임 서버 주소 — 터널 고정 도메인 (필요 시 dart-define 오버라이드).
 /// LLM 프록시(llm_factory)와 REST/WS가 같은 서버라 여기서 단일 관리.
 const String gameServerUrl = String.fromEnvironment(
@@ -30,25 +32,44 @@ class GameServerClient {
 
   static const _timeout = Duration(seconds: 10);
 
+  /// 로그인 JWT — 보호 엔드포인트 공통 (미로그인 시 서버가 401).
+  static Map<String, String> get _authHeaders {
+    final token = LocalStore.instance.token;
+    return {if (token != null) 'Authorization': 'Bearer $token'};
+  }
+
   // --- REST ---
-  Future<Map<String, dynamic>> getJson(String path) async =>
-      await _decode(await http.get(Uri.parse('$baseUrl$path')).timeout(_timeout))
-          as Map<String, dynamic>;
+  Future<Map<String, dynamic>> getJson(String path) async => await _decode(
+          await http.get(Uri.parse('$baseUrl$path'), headers: _authHeaders).timeout(_timeout))
+      as Map<String, dynamic>;
 
-  /// 배열 응답 엔드포인트용 (GET /users/{id}/progress, /users/{id}/sessions).
-  Future<List<dynamic>> getJsonList(String path) async =>
-      await _decode(await http.get(Uri.parse('$baseUrl$path')).timeout(_timeout))
-          as List<dynamic>;
+  /// 배열 응답 엔드포인트용 (GET /users/me/progress, /users/me/sessions).
+  Future<List<dynamic>> getJsonList(String path) async => await _decode(
+          await http.get(Uri.parse('$baseUrl$path'), headers: _authHeaders).timeout(_timeout))
+      as List<dynamic>;
 
-  Future<Map<String, dynamic>> postJson(String path, Object? body) async {
+  Future<Map<String, dynamic>> postJson(String path, Object? body) async =>
+      _send('POST', path, body);
+
+  /// PATCH /users/me (닉네임 변경 — 409 = 중복).
+  Future<Map<String, dynamic>> patchJson(String path, Object? body) async =>
+      _send('PATCH', path, body);
+
+  /// DELETE /users/me (회원 탈퇴).
+  Future<void> deleteJson(String path) async {
     final response = await http
-        .post(
-          Uri.parse('$baseUrl$path'),
-          headers: {'Content-Type': 'application/json'},
-          // 한글 포함 → UTF-8 바이트로 명시 인코딩 (인코딩 모호성 제거).
-          body: utf8.encode(jsonEncode(body)),
-        )
+        .delete(Uri.parse('$baseUrl$path'), headers: _authHeaders)
         .timeout(_timeout);
+    _decode(response);
+  }
+
+  Future<Map<String, dynamic>> _send(String method, String path, Object? body) async {
+    final request = http.Request(method, Uri.parse('$baseUrl$path'))
+      ..headers.addAll({'Content-Type': 'application/json', ..._authHeaders})
+      // 한글 포함 → UTF-8 바이트로 명시 인코딩 (인코딩 모호성 제거).
+      ..bodyBytes = utf8.encode(jsonEncode(body));
+    final response =
+        await http.Response.fromStream(await request.send().timeout(_timeout));
     return _decode(response) as Map<String, dynamic>;
   }
 
@@ -67,23 +88,21 @@ class GameServerClient {
   }
 
   /// 매칭 큐 진입 — /ws/match (성사 시 서버가 matched 이벤트로 자기 몫 브리핑 전송).
+  /// 유저 식별·닉네임은 서버가 JWT에서 처리.
   WebSocketChannel connectMatchSocket({
-    required String userId,
-    required String nickname,
     required String formFactor, // 'android' | 'windows'
   }) {
     final q = Uri(queryParameters: {
-      'user_id': userId,
-      'nickname': nickname,
+      'token': LocalStore.instance.token ?? '',
       'form_factor': formFactor,
     }).query;
     return connectWebSocket('/ws/match?$q');
   }
 
   /// 배틀 방 참가 — /ws/room/{roomId} (ready/utterance/hang_up ↔ state/utterance/verdict).
-  WebSocketChannel connectRoomSocket({
-    required String roomId,
-    required String userId,
-  }) =>
-      connectWebSocket('/ws/room/$roomId?user_id=$userId');
+  WebSocketChannel connectRoomSocket({required String roomId}) {
+    final q =
+        Uri(queryParameters: {'token': LocalStore.instance.token ?? ''}).query;
+    return connectWebSocket('/ws/room/$roomId?$q');
+  }
 }

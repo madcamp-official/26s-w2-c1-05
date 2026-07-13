@@ -54,10 +54,8 @@ class _BossCallScreenState extends State<BossCallScreen> {
       llm: llm,
       generateVariables: () => generateScenarioVariables(llm: llm, boss: boss),
       startServerSession: (variables) async {
-        final userId = LocalStore.instance.userId;
-        if (userId == null) return null; // 계정 없음 — 서버 기록 스킵
+        if (!LocalStore.instance.hasUser) return null; // 미로그인 — 서버 기록 스킵
         final res = await GameServerClient().postJson('/sessions', {
-          'user_id': userId,
           'mode': 'boss',
           'boss_id': boss.id,
           'scenario_variables': variables,
