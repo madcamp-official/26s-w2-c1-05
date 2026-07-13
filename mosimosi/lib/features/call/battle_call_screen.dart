@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/local_store.dart';
 import '../../platform/stt_engine.dart';
 import '../../platform/stt_factory.dart';
 import '../../ui/breakpoints.dart';
@@ -30,11 +31,13 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   BattleRoomController? _room;
   SttEngine? _stt;
   StreamSubscription<SttResult>? _sttSub;
+  StreamSubscription<List<int>>? _audioUplink; // 내 마이크 PCM → 방 릴레이 (실통화)
   Timer? _clock; // 통화 시간 표시용 1초 틱
 
   bool _sttAvailable = false;
   bool _micStarted = false; // 오픈마이크 1회성 시작 가드
   bool _micActive = false;
+  final bool _openMic = LocalStore.instance.openMic; // 설정 — 통화 진입 시점 고정
   String _interim = '';
   bool _secretOpen = false;
   bool _navigated = false;
@@ -56,6 +59,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     final stt = createSttEngine();
     _stt = stt;
     _sttSub = stt.results.listen(_onSttResult);
+    // 실통화 업링크: 캡처 원본을 방 소켓으로 (sendAudio가 in_call 전엔 무시).
+    // 오픈마이크는 상시, PTT는 버튼 누른 동안만 캡처가 흘러 자연히 구간 전송이 된다.
+    _audioUplink = stt.rawAudio.listen((bytes) => _room?.sendAudio(bytes));
     stt.initialize().then((ok) {
       if (!mounted) return;
       setState(() => _sttAvailable = ok);
@@ -64,8 +70,10 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   }
 
   /// 오픈마이크: STT 준비 + 통화 시작, 두 조건이 모두 갖춰지면 1회만 start().
+  /// PTT 모드(설정)에선 자동 시작 없음 — 버튼이 start/stop을 소유.
   void _maybeStartMic() {
     final room = _room;
+    if (!_openMic) return;
     if (room == null || !room.inCall || !_sttAvailable || _micStarted) {
       debugPrint('[BattleCall] _maybeStartMic 보류 — '
           'room=${room != null} inCall=${room?.inCall} '
@@ -106,6 +114,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     _clock?.cancel();
     _silenceTimer?.cancel();
     _sttSub?.cancel();
+    _audioUplink?.cancel();
     _stt?.stop();
     _room?.removeListener(_onRoom);
     _fallbackController.dispose();
@@ -409,6 +418,8 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   }
 
   Widget _micStatus(BattleRoomController room) {
+    // PTT 모드에선 하단 버튼이 상태를 표시 — 필 생략.
+    if (_sttAvailable && !_openMic) return const SizedBox.shrink();
     final label = !room.inCall
         ? '연결 중…'
         : _sttAvailable
@@ -469,12 +480,59 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             onTap: room.hangUp,
           ),
           // 오픈마이크: STT 가능하면 버튼 없이 상시 청취(_micStatus 배지가 상태 표시).
-          // STT 불가할 때만 텍스트 입력으로 대체.
+          // PTT 설정 시 누르는 동안 말하기 버튼. STT 불가할 때만 텍스트 입력으로 대체.
           if (!_sttAvailable) ...[
             const SizedBox(width: YbsSpace.s3),
             Expanded(child: _textFallback(room)),
+          ] else if (!_openMic) ...[
+            const SizedBox(width: YbsSpace.s3),
+            Expanded(child: _pttButton(room)),
           ],
         ],
+      ),
+    );
+  }
+
+  /// PTT(설정: 오픈마이크 꺼짐): 누르면 캡처 시작, 떼면 stop → 서버가 버퍼를
+  /// 강제 flush해 isFinal 결과가 오고, _onSttResult가 그대로 전송한다.
+  void _pttDown(BattleRoomController room) {
+    if (!room.inCall || _micActive) return;
+    setState(() => _micActive = true);
+    _stt?.start();
+  }
+
+  void _pttUp() {
+    if (!_micActive) return;
+    setState(() => _micActive = false);
+    _stt?.stop();
+  }
+
+  Widget _pttButton(BattleRoomController room) {
+    return GestureDetector(
+      onTapDown: (_) => _pttDown(room),
+      onTapUp: (_) => _pttUp(),
+      onTapCancel: _pttUp,
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: YbsColor.go500,
+          borderRadius: BorderRadius.circular(YbsRadius.lg),
+          border: Border.all(color: YbsColor.go600),
+          boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 24)],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mic, size: 24, color: YbsColor.textOnGo),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Text(_micActive ? '듣는 중 — 떼면 전송' : '누르는 동안 말하기',
+                style: const TextStyle(
+                    fontFamily: YbsType.body,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: YbsColor.textOnGo)),
+          ],
+        ),
       ),
     );
   }

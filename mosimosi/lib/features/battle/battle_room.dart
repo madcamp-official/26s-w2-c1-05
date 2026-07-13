@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../../platform/tts_engine.dart';
+import '../../platform/pcm_player.dart';
 import '../../services/game_server_client.dart';
 
 /// 매칭 성사 페이로드 — 서버 /ws/match `matched` 이벤트의 자기 몫(규칙 #2).
@@ -54,14 +54,15 @@ class BattleUtterance {
   final int tStartMs;
 }
 
-/// 배틀 방 컨트롤러 — /ws/room 연결·상태머신·발화 릴레이·상대 TTS 재생을 소유.
+/// 배틀 방 컨트롤러 — /ws/room 연결·상태머신·실통화 오디오 릴레이·발화(자막)를 소유.
+/// 음성은 원본 PCM을 바이너리 프레임으로 서버가 상대에게 중계(실시간 통화),
+/// 텍스트 utterance는 자막·심판용으로만 흐른다 (TTS 재생 없음).
 /// 매칭 화면이 생성·[register], 브리핑/통화/결과 화면이 [of]로 조회(라우트 param 기준).
 /// 서버 상태: matched → briefing → in_call → judging → done.
 class BattleRoomController extends ChangeNotifier {
   BattleRoomController({
     required this.match,
     required this.myUserId,
-    required this.tts,
   });
 
   // ---- roomId → 컨트롤러 레지스트리 (세션 스코프 인메모리) ----
@@ -76,7 +77,7 @@ class BattleRoomController extends ChangeNotifier {
 
   final BattleMatch match;
   final String myUserId;
-  final TtsEngine tts;
+  final PcmStreamPlayer _player = PcmStreamPlayer(); // 상대 음성 실시간 재생
 
   WebSocketChannel? _channel;
   bool _disposed = false;
@@ -96,6 +97,7 @@ class BattleRoomController extends ChangeNotifier {
   /// 방 소켓 연결 — 매칭 직후 1회. 서버 메시지를 상태로 반영.
   void connect() {
     if (_channel != null) return;
+    PcmStreamPlayer.ensureEngine(); // 통화 시작(in_call) 전 미리 초기화 (브리핑 동안)
     final ch = GameServerClient().connectRoomSocket(roomId: match.roomId);
     _channel = ch;
     ch.stream.listen(
@@ -115,13 +117,21 @@ class BattleRoomController extends ChangeNotifier {
 
   void _onMessage(dynamic raw) {
     if (_disposed) return;
-    final msg = jsonDecode(raw as String) as Map<String, dynamic>;
+    // 바이너리 = 상대 음성 PCM — 즉시 재생 큐로 (실통화 경로).
+    if (raw is! String) {
+      _player.feed(raw is Uint8List ? raw : Uint8List.fromList(raw as List<int>));
+      return;
+    }
+    final msg = jsonDecode(raw) as Map<String, dynamic>;
     switch (msg['type']) {
       case 'state':
         state = msg['state'] as String? ?? state;
-        if (state == 'in_call') _callStartedAt ??= DateTime.now();
+        if (state == 'in_call') {
+          _callStartedAt ??= DateTime.now();
+          _player.start(); // 통화 시작 — 수신 오디오 재생 개시
+        }
         notifyListeners();
-      case 'utterance':
+      case 'utterance': // 자막·심판용 텍스트 (재생은 위 바이너리 경로가 담당)
         final u = BattleUtterance(
           fromUserId: msg['from'] as String? ?? '',
           text: msg['text'] as String? ?? '',
@@ -129,7 +139,6 @@ class BattleRoomController extends ChangeNotifier {
         );
         if (u.text.isEmpty) return;
         utterances.add(u);
-        if (u.fromUserId != myUserId) tts.speak(u.text); // B-lite: 상대 발화만 재생
         notifyListeners();
       case 'verdict':
         verdict = msg;
@@ -139,6 +148,13 @@ class BattleRoomController extends ChangeNotifier {
 
   void _send(Map<String, dynamic> msg) =>
       _channel?.sink.add(jsonEncode(msg));
+
+  /// 내 마이크 PCM 청크를 상대에게 릴레이 (통화 중에만).
+  void sendAudio(List<int> bytes) {
+    if (!inCall || _disposed) return;
+    _channel?.sink
+        .add(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
+  }
 
   /// 브리핑 준비 완료 — 양측 모두 보내면 서버가 in_call로 전환.
   void sendReady() {
@@ -161,7 +177,7 @@ class BattleRoomController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _channel?.sink.close();
-    tts.stopSpeaking();
+    _player.dispose();
     super.dispose();
   }
 }

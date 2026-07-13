@@ -52,6 +52,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
       stt: createSttEngine(),
       tts: createTtsEngine(voicePreset: boss.voicePreset),
       llm: llm,
+      openMic: LocalStore.instance.openMic,
       generateVariables: () => generateScenarioVariables(llm: llm, boss: boss),
       startServerSession: (variables) async {
         if (!LocalStore.instance.hasUser) return null; // 미로그인 — 서버 기록 스킵
@@ -429,14 +430,61 @@ class _BossCallScreenState extends State<BossCallScreen> {
               ),
               if (!connecting) ...[
                 const SizedBox(width: YbsSpace.s3),
-                Expanded(child: s.sttAvailable ? _pttButton(s) : _textFallback(s)),
+                Expanded(
+                    child: !s.sttAvailable
+                        ? _textFallback(s)
+                        : s.openMic
+                            ? _openMicStatus(s)
+                            : _pttButton(s)),
               ],
             ],
           ),
-          if (!connecting && s.sttAvailable) ...[
+          if (!connecting && s.sttAvailable && !s.openMic) ...[
             const SizedBox(height: YbsSpace.s2 + 2),
             const Text('손을 떼면 음성이 전송돼요', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// 오픈마이크 상태 필 — 버튼 없이 상시 청취 (배틀 통화의 _micStatus와 동일 문법).
+  Widget _openMicStatus(CallSessionController s) {
+    final label =
+        s.busy || s.speaking ? '보스가 말하는 중…' : '듣고 있어요 — 편하게 말하세요';
+    return Container(
+      height: 76,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: YbsColor.go500.withValues(alpha: 0.08),
+        border: Border.all(color: YbsColor.go600),
+        borderRadius: BorderRadius.circular(YbsRadius.lg),
+        boxShadow: [BoxShadow(color: YbsColor.go500.withValues(alpha: 0.12), blurRadius: 18)],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(
+              4,
+              (i) => Padding(
+                padding: EdgeInsets.only(left: i == 0 ? 0 : 2),
+                child: Container(
+                    width: 3,
+                    height: s.busy || s.speaking ? 8 : 16,
+                    decoration: BoxDecoration(color: YbsColor.go400, borderRadius: BorderRadius.circular(2))),
+              ),
+            ),
+          ),
+          const SizedBox(width: YbsSpace.s3 - 2),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YbsColor.go300)),
+          ),
         ],
       ),
     );
