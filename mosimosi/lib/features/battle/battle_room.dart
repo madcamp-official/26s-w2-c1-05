@@ -14,6 +14,7 @@ class BattleMatch {
     required this.secretGoal,
     required this.ruleCard,
     required this.situation,
+    required this.openingLine,
     required this.opponentNickname,
     required this.opponentFormFactor,
   });
@@ -23,6 +24,7 @@ class BattleMatch {
   final String secretGoal;
   final String? ruleCard; // 상담원 전용 — 민원인은 null
   final String situation;
+  final String openingLine; // 침묵 지속 시 제안할 내 몫의 첫마디
   final String opponentNickname;
   final String opponentFormFactor; // 'android' | 'windows'
 
@@ -36,6 +38,7 @@ class BattleMatch {
         secretGoal: j['secretGoal'] as String? ?? '',
         ruleCard: j['ruleCard'] as String?,
         situation: j['situation'] as String? ?? '',
+        openingLine: j['openingLine'] as String? ?? '',
         opponentNickname:
             (j['opponent'] as Map<String, dynamic>?)?['nickname'] as String? ?? '상대',
         opponentFormFactor:
@@ -93,7 +96,7 @@ class BattleRoomController extends ChangeNotifier {
   /// 방 소켓 연결 — 매칭 직후 1회. 서버 메시지를 상태로 반영.
   void connect() {
     if (_channel != null) return;
-    final ch = GameServerClient().connectRoomSocket(roomId: match.roomId, userId: myUserId);
+    final ch = GameServerClient().connectRoomSocket(roomId: match.roomId);
     _channel = ch;
     ch.stream.listen(
       _onMessage,

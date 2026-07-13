@@ -67,9 +67,8 @@ class SessionRecord {
 
 /// 도감 진행. 계정 없으면 빈 맵 (온보딩 전 — 게이팅상 도달 안 하지만 방어).
 Future<Map<String, BossProgress>> fetchProgress() async {
-  final userId = LocalStore.instance.userId;
-  if (userId == null) return const {};
-  final rows = await GameServerClient().getJsonList('/users/$userId/progress');
+  if (!LocalStore.instance.hasUser) return const {};
+  final rows = await GameServerClient().getJsonList('/users/me/progress');
   return {
     for (final r in rows.whereType<Map<String, dynamic>>())
       r['boss_id'] as String: BossProgress.fromJson(r),
@@ -78,10 +77,9 @@ Future<Map<String, BossProgress>> fetchProgress() async {
 
 /// 최근 세션 목록 (최신순 — 서버 ORDER BY started_at DESC).
 Future<List<SessionRecord>> fetchSessions({int limit = 50}) async {
-  final userId = LocalStore.instance.userId;
-  if (userId == null) return const [];
-  final rows = await GameServerClient()
-      .getJsonList('/users/$userId/sessions?limit=$limit');
+  if (!LocalStore.instance.hasUser) return const [];
+  final rows =
+      await GameServerClient().getJsonList('/users/me/sessions?limit=$limit');
   return [
     for (final r in rows.whereType<Map<String, dynamic>>())
       SessionRecord.fromJson(r),

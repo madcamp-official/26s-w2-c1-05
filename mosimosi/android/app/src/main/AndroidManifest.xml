@@ -43,10 +43,6 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- speech_to_text: 온디바이스 STT 서비스 조회 -->
-        <intent>
-            <action android:name="android.speech.RecognitionService"/>
-        </intent>
         <!-- flutter_tts: TTS 엔진 조회 -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE"/>

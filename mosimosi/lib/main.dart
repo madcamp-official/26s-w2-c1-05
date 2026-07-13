@@ -15,8 +15,11 @@ Future<void> main() async {
     // .env 없거나 로드 실패 시 데스크톱 Whisper 미설정 → 폴백 UI로 동작.
   }
   await LocalStore.init();
+  // 로그인 토큰 + 닉네임까지 있어야 온보딩 통과 (닉네임 미설정 = 온보딩 중단분).
+  final store = LocalStore.instance;
   final router = buildRouter(
-    initialLocation: LocalStore.instance.hasUser ? '/home' : '/onboarding',
+    initialLocation:
+        store.hasUser && store.nickname != null ? '/home' : '/onboarding',
   );
   runApp(ProviderScope(child: MainApp(router: router)));
 }
