@@ -230,6 +230,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  /// 공간이 충분하면 기존처럼 채우고(Expanded 유지), 키보드 등으로 줄어들면
+  /// 넘치는 대신 스크롤되게 함. IntrinsicHeight가 Expanded의 실제 높이를
+  /// 재보고 그만큼을 ConstrainedBox(minHeight)에 전달하는 표준 패턴.
+  Widget _scrollable(Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(child: child),
+        ),
+      ),
+    );
+  }
+
   Widget _heroCircle({required IconData icon, required Color accent, required Color border}) {
     return Container(
       width: 110,
@@ -259,7 +273,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           colors: [YbsColor.live500.withValues(alpha: 0.10), Colors.transparent],
         ),
       ),
-      child: Column(
+      child: _scrollable(Column(
         children: [
           Expanded(
             child: Column(
@@ -279,14 +293,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           _footer(cta: '시작하기', onTap: _next),
         ],
-      ),
+      )),
     );
   }
 
   // ---- 2/3 마이크 권한 (+데스크톱 STT 체크) ----
   Widget _micPage() {
     final desktop = isDesktop(context);
-    return Column(
+    return _scrollable(Column(
       children: [
         Expanded(
           child: Column(
@@ -313,7 +327,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
         _footer(cta: desktop ? '다음' : '마이크 허용', onTap: _requestMic, caption: '설정에서 언제든 바꿀 수 있어요'),
       ],
-    );
+    ));
   }
 
   Widget _desktopCheckCard() {
@@ -359,7 +373,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _loginPage() {
     final store = LocalStore.instance;
     final loggedIn = store.hasUser;
-    return Column(
+    return _scrollable(Column(
       children: [
         Expanded(
           child: Padding(
@@ -487,7 +501,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         else
           _footer(caption: '이메일은 계정 식별에만 쓰여요 — 비밀번호는 만들지 않아요'),
       ],
-    );
+    ));
   }
 
   Widget _authField(TextEditingController controller, String hint,
@@ -534,7 +548,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         );
 
-    return Column(
+    return _scrollable(Column(
       children: [
         Expanded(
           child: Padding(
@@ -594,6 +608,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             cta: _submitting ? '계정 만드는 중…' : '첫 보스에게 전화 걸기',
             onTap: _submitNickname),
       ],
-    );
+    ));
   }
 }
