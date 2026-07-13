@@ -51,13 +51,11 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
 
   void _enterQueue() {
     final userId = LocalStore.instance.userId;
-    if (userId == null) {
-      setState(() => _error = '계정이 없어요 — 온보딩을 먼저 진행해 주세요.');
+    if (userId == null || !LocalStore.instance.hasUser) {
+      setState(() => _error = '로그인이 필요해요 — 온보딩을 먼저 진행해 주세요.');
       return;
     }
     final socket = GameServerClient().connectMatchSocket(
-      userId: userId,
-      nickname: _myNickname,
       formFactor:
           defaultTargetPlatform == TargetPlatform.android ? 'android' : 'windows',
     );

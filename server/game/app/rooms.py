@@ -14,6 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from . import db, llm
+from .auth import user_id_from_token
 
 router = APIRouter()
 
@@ -283,7 +284,11 @@ async def create_room(a: dict, b: dict) -> Room:
 
 
 @router.websocket("/ws/room/{room_id}")
-async def room_ws(ws: WebSocket, room_id: str, user_id: str):
+async def room_ws(ws: WebSocket, room_id: str, token: str):
+    user_id = user_id_from_token(token)
+    if user_id is None:
+        await ws.close(code=4401)
+        return
     room = rooms.get(room_id)
     if room is None or user_id not in room.players:
         await ws.close(code=4404)

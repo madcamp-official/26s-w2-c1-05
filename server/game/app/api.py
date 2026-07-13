@@ -1,32 +1,22 @@
-"""REST: 유저(온보딩) · 도감 진행 · 판 기록 (FSD §8)."""
+"""REST: 유저 조회 · 도감 진행 · 판 기록 (FSD §8).
+
+계정 생성·수정은 auth.py(소셜 로그인)로 이동. 여기 라우트는 모두
+current_user(JWT)로 보호되며, '내 것'은 /users/me/* 경로를 쓴다.
+"""
 
 import json
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from .auth import current_user
 from .db import require_pool
 
 router = APIRouter()
 
 
 # ---- 유저 ----
-class CreateUser(BaseModel):
-    nickname: str
-
-
-@router.post("/users")
-async def create_user(body: CreateUser):
-    pool = require_pool()
-    try:
-        row = await pool.fetchrow(
-            "INSERT INTO users (nickname) VALUES ($1) RETURNING id, nickname, elo", body.nickname)
-    except Exception:
-        raise HTTPException(409, "nickname taken")
-    return dict(row) | {"id": str(row["id"])}
-
-
 @router.get("/users/{user_id}")
 async def get_user(user_id: uuid.UUID):
     pool = require_pool()
@@ -37,8 +27,8 @@ async def get_user(user_id: uuid.UUID):
 
 
 # ---- 도감 진행 ----
-@router.get("/users/{user_id}/progress")
-async def get_progress(user_id: uuid.UUID):
+@router.get("/users/me/progress")
+async def get_progress(user_id: uuid.UUID = Depends(current_user)):
     pool = require_pool()
     rows = await pool.fetch(
         "SELECT boss_id, cleared_at, best_score, attempts FROM boss_progress WHERE user_id=$1", user_id)
@@ -47,7 +37,6 @@ async def get_progress(user_id: uuid.UUID):
 
 # ---- 판 기록 ----
 class StartSession(BaseModel):
-    user_id: uuid.UUID
     mode: str  # 'boss' | 'battle'
     boss_id: str | None = None
     room_id: uuid.UUID | None = None
@@ -55,12 +44,12 @@ class StartSession(BaseModel):
 
 
 @router.post("/sessions")
-async def start_session(body: StartSession):
+async def start_session(body: StartSession, user_id: uuid.UUID = Depends(current_user)):
     pool = require_pool()
     row = await pool.fetchrow(
         "INSERT INTO sessions (user_id, mode, boss_id, room_id, scenario_variables, started_at)"
         " VALUES ($1,$2,$3,$4,$5,now()) RETURNING id",
-        body.user_id, body.mode, body.boss_id, body.room_id,
+        user_id, body.mode, body.boss_id, body.room_id,
         json.dumps(body.scenario_variables or [], ensure_ascii=False))
     return {"id": str(row["id"])}
 
@@ -80,7 +69,8 @@ class EndSession(BaseModel):
 
 
 @router.post("/sessions/{session_id}/end")
-async def end_session(session_id: uuid.UUID, body: EndSession):
+async def end_session(session_id: uuid.UUID, body: EndSession,
+                      user_id: uuid.UUID = Depends(current_user)):
     pool = require_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -91,6 +81,8 @@ async def end_session(session_id: uuid.UUID, body: EndSession):
                 json.dumps(body.judge, ensure_ascii=False) if body.judge else None)
             if row is None:
                 raise HTTPException(404)
+            if row["user_id"] != user_id:  # 남의 세션 종료 시도 — 트랜잭션 롤백
+                raise HTTPException(403)
             for u in body.transcript:
                 await conn.execute(
                     "INSERT INTO utterances (session_id, speaker, text, t_start_ms) VALUES ($1,$2,$3,$4)",
@@ -108,8 +100,8 @@ async def end_session(session_id: uuid.UUID, body: EndSession):
     return {"ok": True}
 
 
-@router.get("/users/{user_id}/sessions")
-async def list_sessions(user_id: uuid.UUID, limit: int = 20):
+@router.get("/users/me/sessions")
+async def list_sessions(limit: int = 20, user_id: uuid.UUID = Depends(current_user)):
     pool = require_pool()
     rows = await pool.fetch(
         "SELECT id, mode, boss_id, room_id, started_at, ended_at, result, score"

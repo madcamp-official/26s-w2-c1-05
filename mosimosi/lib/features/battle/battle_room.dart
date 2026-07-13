@@ -93,7 +93,7 @@ class BattleRoomController extends ChangeNotifier {
   /// 방 소켓 연결 — 매칭 직후 1회. 서버 메시지를 상태로 반영.
   void connect() {
     if (_channel != null) return;
-    final ch = GameServerClient().connectRoomSocket(roomId: match.roomId, userId: myUserId);
+    final ch = GameServerClient().connectRoomSocket(roomId: match.roomId);
     _channel = ch;
     ch.stream.listen(
       _onMessage,

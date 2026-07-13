@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 load_dotenv()
 
-from . import api, db, llm, matching, rooms, stt  # noqa: E402
+from . import api, auth, db, llm, matching, rooms, stt  # noqa: E402
 
 
 @asynccontextmanager
@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="여보세요 게임 서버", lifespan=lifespan)
+app.include_router(auth.router)  # /users/me가 api의 /users/{user_id}보다 먼저 매칭돼야 함
 app.include_router(api.router)
 app.include_router(llm.router)
 app.include_router(matching.router)
