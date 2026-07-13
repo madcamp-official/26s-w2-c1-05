@@ -2,12 +2,13 @@
 -- 원칙: 보스 정의는 코드 시드(진실의 원천), DB는 진행·기록만.
 --       음성 원본 컬럼 없음(규칙 #5). 채점 시간축은 t_start_ms(규칙 #3).
 
--- 1. 유저 — 소셜 로그인 계정 (provider+provider_id가 식별자, auth.py)
+-- 1. 유저 — 소셜/일반 로그인 계정 (provider+provider_id가 식별자, auth.py)
 CREATE TABLE IF NOT EXISTS users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider      text NOT NULL,               -- 'google' | 'kakao'
-  provider_id   text NOT NULL,               -- 프로바이더 계정 고유 ID
+  provider      text NOT NULL,               -- 'google' | 'kakao' | 'local'(이메일 가입)
+  provider_id   text NOT NULL,               -- 프로바이더 계정 고유 ID (local은 이메일 소문자)
   email         text,                        -- 프로바이더 제공 (카카오 미동의 시 null)
+  password_hash text,                        -- bcrypt — local 계정만 사용
   nickname      text UNIQUE,                 -- null = 온보딩(닉네임 설정) 미완
   elo           int  NOT NULL DEFAULT 1500,
   created_at    timestamptz NOT NULL DEFAULT now(),

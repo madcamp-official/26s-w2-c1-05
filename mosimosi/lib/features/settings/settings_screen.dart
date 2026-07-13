@@ -25,7 +25,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (LocalStore.instance.hasUser) {
       GameServerClient().getJson('/users/me').then((me) {
         if (!mounted) return;
-        final provider = me['provider'] == 'kakao' ? 'Kakao' : 'Google';
+        final provider = switch (me['provider']) {
+          'kakao' => 'Kakao',
+          'local' => '이메일',
+          _ => 'Google',
+        };
         final email = me['email'] as String?;
         setState(() => _accountLabel =
             email == null ? provider : '$email · $provider');

@@ -9,11 +9,13 @@
 """
 
 import os
+import re
 import time
 import urllib.parse
 import uuid
 
 import asyncpg
+import bcrypt
 import httpx
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -175,6 +177,55 @@ async def auth_callback(provider: str, state: str,
     if row["nickname"]:
         params["nickname"] = row["nickname"]
     return _loopback(port, params)
+
+
+# ---- 일반(이메일+비밀번호) 가입/로그인 — provider='local', provider_id=이메일 ----
+# 이메일 인증 메일·비밀번호 재설정은 의도적 생략 (SMTP 인프라 없음, 데모 범위).
+class LocalAuth(BaseModel):
+    email: str
+    password: str
+
+
+def _issue(row, is_new: bool) -> dict:
+    """소셜 loopback 콜백과 같은 필드 구성 — 앱 AuthResult가 공유."""
+    return {
+        "token": create_token(str(row["id"])),
+        "user_id": str(row["id"]),
+        "is_new": is_new,
+        "nickname": row["nickname"],
+    }
+
+
+@router.post("/auth/local/signup")
+async def local_signup(body: LocalAuth):
+    email = body.email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(422, "invalid email")
+    if len(body.password) < 8:
+        raise HTTPException(422, "password must be at least 8 chars")
+    pool = require_pool()
+    pw_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    try:
+        row = await pool.fetchrow(
+            "INSERT INTO users (provider, provider_id, email, password_hash)"
+            " VALUES ('local',$1,$2,$3) RETURNING id, nickname", email, email, pw_hash)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(409, "email taken")
+    return _issue(row, True)
+
+
+@router.post("/auth/local/login")
+async def local_login(body: LocalAuth):
+    email = body.email.strip().lower()
+    pool = require_pool()
+    row = await pool.fetchrow(
+        "SELECT id, nickname, password_hash FROM users"
+        " WHERE provider='local' AND provider_id=$1", email)
+    if (row is None or not row["password_hash"]
+            or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode())):
+        raise HTTPException(401, "invalid email or password")
+    await pool.execute("UPDATE users SET last_seen_at=now() WHERE id=$1", row["id"])
+    return _issue(row, False)
 
 
 # ---- 내 계정 ----

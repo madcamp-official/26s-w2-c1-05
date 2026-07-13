@@ -34,6 +34,27 @@ class AuthException implements Exception {
 class AuthService {
   static const _timeout = Duration(minutes: 3);
 
+  /// 일반(이메일+비밀번호) 가입 — 409 = 이미 가입된 이메일 (GameServerException).
+  Future<AuthResult> signUpLocal(
+          {required String email, required String password}) =>
+      _local('/auth/local/signup', email, password);
+
+  /// 일반 로그인 — 401 = 이메일/비밀번호 불일치 (GameServerException).
+  Future<AuthResult> signInLocal(
+          {required String email, required String password}) =>
+      _local('/auth/local/login', email, password);
+
+  Future<AuthResult> _local(String path, String email, String password) async {
+    final res = await GameServerClient()
+        .postJson(path, {'email': email, 'password': password});
+    return AuthResult(
+      token: res['token'] as String,
+      userId: res['user_id'] as String,
+      nickname: res['nickname'] as String?,
+      isNew: res['is_new'] == true,
+    );
+  }
+
   /// [provider]: 'google' | 'kakao'. 취소·실패는 [AuthException].
   Future<AuthResult> signIn(String provider) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
