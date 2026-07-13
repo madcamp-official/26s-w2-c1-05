@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../core/local_store.dart';
-import '../../platform/tts_factory.dart';
 import '../../services/game_server_client.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
@@ -69,7 +68,6 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
         final controller = BattleRoomController(
           match: match,
           myUserId: userId,
-          tts: createTtsEngine(),
         );
         BattleRoomController.register(controller);
         controller.connect();

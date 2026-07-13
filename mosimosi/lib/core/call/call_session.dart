@@ -43,6 +43,7 @@ class CallSessionController extends ChangeNotifier {
     required this.llm,
     required this.generateVariables,
     this.startServerSession,
+    this.openMic = true,
   });
 
   final Boss boss;
@@ -50,6 +51,11 @@ class CallSessionController extends ChangeNotifier {
   final TtsEngine tts;
   final LlmClient llm;
   final Future<List<String>> Function() generateVariables;
+
+  /// true(기본) = 오픈마이크: active 진입 시 STT 1회 start, 서버 VAD(0.8초 침묵)가
+  /// 끊어주는 isFinal 결과를 그대로 발화로 전송 (배틀과 동일 방식).
+  /// false = PTT: pressTalk/releaseTalk로 구간 지정.
+  final bool openMic;
 
   /// 서버 세션 개시 (POST /sessions → UUID, Phase 2 §4). null이면 미보고.
   /// active 진입 시 fire-and-forget — 실패해도 통화는 계속 (오프라인 내성).
@@ -108,6 +114,7 @@ class CallSessionController extends ChangeNotifier {
   }
 
   bool get busy => _replying; // PTT 잠금 (응답 생성 중)
+  bool get speaking => _speaking; // 보스 TTS 재생 중 (오픈마이크 뮤트 구간)
   int get elapsedMs => _startedAt == null ? 0 : DateTime.now().difference(_startedAt!).inMilliseconds;
   int get elapsedSeconds => elapsedMs ~/ 1000;
   int get remainingSeconds => boss.timeLimit.inSeconds - elapsedSeconds;
@@ -148,6 +155,7 @@ class CallSessionController extends ChangeNotifier {
 
   // ================================================================ PTT
   Future<void> pressTalk() async {
+    if (openMic) return; // 오픈마이크 모드에선 버튼 상호작용 없음
     if (!sttAvailable || _replying || _ended || !_started) return;
     if (_speaking) {
       _ttsQueue.clear(); // 보스 말 끊고 들어가기
@@ -181,6 +189,26 @@ class CallSessionController extends ChangeNotifier {
 
   void _onSttResult(SttResult r) {
     if (_ended) return;
+    if (openMic) {
+      if (!r.isFinal) {
+        interim = r.text;
+        notifyListeners();
+        return;
+      }
+      interim = '';
+      final text = r.text.trim();
+      // 응답 생성·보스 발화 중 도착분은 무시 — 반이중: 마이크는 뮤트돼 있지만
+      // 뮤트 직전 캡처가 뒤늦게 전사돼 도착할 수 있어 이중 방어.
+      if (text.isEmpty || !_started || _replying || _speaking) {
+        notifyListeners();
+        return;
+      }
+      _idleSince = null;
+      _silence = false;
+      // 서버 tStartMs는 STT 스트림 시작(≈active 진입) 기준 — 규칙 #3과 동일 축.
+      _sendUser(text, tStartMs: r.tStartMs);
+      return;
+    }
     if (r.isFinal) {
       interim = '';
       if (_awaitingFinal) {
@@ -200,12 +228,13 @@ class CallSessionController extends ChangeNotifier {
   }
 
   // ================================================================ 대화 루프
-  Future<void> _sendUser(String text) async {
+  Future<void> _sendUser(String text, {int? tStartMs}) async {
     final t = _pttPressedAt ?? DateTime.now();
     transcript.add(Utterance(
       speaker: 'user',
       text: text,
-      tStartMs: _startedAt == null ? 0 : t.difference(_startedAt!).inMilliseconds,
+      tStartMs: tStartMs ??
+          (_startedAt == null ? 0 : t.difference(_startedAt!).inMilliseconds),
     ));
     notifyListeners();
     await _bossReply();
@@ -271,11 +300,18 @@ class CallSessionController extends ChangeNotifier {
     if (_speaking) return;
     _speaking = true;
     if (!_started) _activate(); // 첫 발성 = 통화 시작 (active)
+    if (openMic && sttAvailable) stt.setMuted(true); // 반이중 — 에코 되먹임 차단
     notifyListeners();
     while (_ttsQueue.isNotEmpty && !_ended) {
       await tts.speak(_ttsQueue.removeAt(0));
     }
     _speaking = false;
+    if (openMic && sttAvailable) {
+      // 잔향 꼬리(스피커 여운)가 마이크에 남는 짧은 구간까지 뮤트 유지.
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!_speaking && !_ended) stt.setMuted(false);
+      });
+    }
     if (!_replying && !_ended) _idleSince = DateTime.now(); // 이제 내 차례
     notifyListeners();
   }
@@ -284,6 +320,7 @@ class CallSessionController extends ChangeNotifier {
   void _activate() {
     _started = true;
     _startedAt = DateTime.now();
+    if (openMic && sttAvailable) stt.start(); // 상시 청취 — 세션 끝까지 1회
     _ticker = Timer.periodic(_tickInterval, (_) => _tick());
     // 실제 대화가 시작된 시점에만 서버 세션 개시 (연결 중 취소는 서버에 안 남김).
     startServerSession?.call(variables).then(

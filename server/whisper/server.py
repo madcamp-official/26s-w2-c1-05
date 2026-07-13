@@ -24,6 +24,14 @@ FRAME_BYTES = SAMPLE_RATE * FRAME_MS // 1000 * 2  # 16-bit mono → 960 bytes
 SILENCE_MS = 800
 SILENCE_FRAMES = SILENCE_MS // FRAME_MS  # ≈ 26 프레임
 
+# 무억제 마이크의 방 소음 바닥이 webrtcvad(2) 문턱보다 높아 VAD만으로는 침묵을
+# 판정 못 한다 (2026-07-13 camp-3 실측: ±50 균일 노이즈도 87%가 speech 판정
+# → silence 카운터가 영원히 26에 못 닿아 flush 불발). RMS 게이트를 앞단에 둔다.
+RMS_GATE = float(os.getenv("WHISPER_RMS_GATE", "300"))
+# 안전망: VAD가 포화돼도 무한 무응답만은 방지 — 누적 발화가 이 길이를 넘으면 강제 flush.
+MAX_SEGMENT_MS = 10_000
+MAX_SEGMENT_BYTES = SAMPLE_RATE * 2 * MAX_SEGMENT_MS // 1000
+
 # 기본값 = 3090(GPU) + large-v3(한국어 정확도↑). 로컬 CPU: WHISPER_DEVICE=cpu WHISPER_COMPUTE=int8
 MODEL = os.getenv("WHISPER_MODEL", "large-v3")
 DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
@@ -32,10 +40,22 @@ model = WhisperModel(MODEL, device=DEVICE, compute_type=COMPUTE)
 vad = webrtcvad.Vad(2)  # 0(관대)~3(엄격)
 
 
+def frame_rms(frame: bytes) -> float:
+    a = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
+    return float(np.sqrt(np.mean(a * a)))
+
+
 def transcribe(pcm: bytes) -> str:
     audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-    segments, _ = model.transcribe(audio, language="ko", beam_size=1)
-    return "".join(s.text for s in segments).strip()
+    segments, _ = model.transcribe(
+        audio, language="ko", beam_size=1,
+        # 2차 관문(Silero): webrtcvad+RMS 게이트를 통과한 버퍼라도 소음뿐이면
+        # 전사 없이 빈 결과 — 시끄러운 방에서 "감사합니다" 환청 방지 (2026-07-13).
+        vad_filter=True,
+        condition_on_previous_text=False,  # 환청이 다음 전사로 전염되는 것 방지
+    )
+    # no_speech_prob 높은 세그먼트 = whisper 스스로 말 아니라고 본 구간 — 버림.
+    return "".join(s.text for s in segments if s.no_speech_prob < 0.6).strip()
 
 
 async def handle(ws, *_):
@@ -64,11 +84,16 @@ async def handle(ws, *_):
             }))
 
     async for message in ws:
-        # 제어 프레임(텍스트): 발화 종료 → 즉시 flush
+        # 제어 프레임(텍스트): stop = 강제 flush, cancel = 현재 분절 폐기(전사 없음)
         if isinstance(message, str):
             try:
-                if json.loads(message).get("event") == "stop":
+                event = json.loads(message).get("event")
+                if event == "stop":
                     await flush()
+                elif event == "cancel":  # 클라 에코 게이트 — TTS 직전 새어든 오디오 폐기
+                    voiced = bytearray()
+                    triggered = False
+                    silence = 0
             except (ValueError, AttributeError):
                 pass
             continue
@@ -79,7 +104,9 @@ async def handle(ws, *_):
             frame = bytes(buf[:FRAME_BYTES])
             del buf[:FRAME_BYTES]
             frame_index += 1
-            is_speech = vad.is_speech(frame, SAMPLE_RATE)
+            # RMS 게이트를 먼저 — 게이트 미달이면 VAD 문지도 않고 침묵 처리.
+            is_speech = (frame_rms(frame) >= RMS_GATE
+                         and vad.is_speech(frame, SAMPLE_RATE))
 
             if not triggered:
                 if is_speech:
@@ -96,6 +123,8 @@ async def handle(ws, *_):
                     silence += 1
                     if silence >= SILENCE_FRAMES:
                         await flush()
+                if len(voiced) >= MAX_SEGMENT_BYTES:
+                    await flush()
 
 
 async def main():

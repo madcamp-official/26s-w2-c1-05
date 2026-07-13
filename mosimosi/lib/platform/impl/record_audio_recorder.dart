@@ -16,6 +16,18 @@ class RecordAudioRecorder implements AudioRecorder {
       encoder: rec.AudioEncoder.pcm16bits,
       sampleRate: 16000,
       numChannels: 1,
+      // 오픈마이크 필수: 노이즈 바닥을 낮춰 서버 VAD의 침묵 판정을 가능하게 하고
+      // (2026-07-13 무응답 버그 원인), 에코 캔슬은 스피커 출력(보스 TTS·배틀
+      // 상대 음성)이 마이크로 되먹임돼 내 발화로 전사되는 것을 방지.
+      echoCancel: true,
+      noiseSuppress: true,
+      // Android AEC는 VOICE_COMMUNICATION 캡처 경로에서만 실효성이 보장됨
+      // (echoCancel 단독으론 DEFAULT 소스라 기기 의존) — 통화 앱 표준 조합.
+      androidConfig: rec.AndroidRecordConfig(
+        audioSource: rec.AndroidAudioSource.voiceCommunication,
+        audioManagerMode: rec.AudioManagerMode.modeInCommunication,
+        speakerphone: true,
+      ),
     ));
     yield* stream;
   }

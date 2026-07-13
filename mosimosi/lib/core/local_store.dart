@@ -9,6 +9,7 @@ class LocalStore {
   static const _kUserId = 'user_id';
   static const _kNickname = 'nickname';
   static const _kToken = 'auth_token';
+  static const _kOpenMic = 'open_mic';
 
   static const _secure = FlutterSecureStorage(
       aOptions: AndroidOptions(encryptedSharedPreferences: true));
@@ -56,6 +57,13 @@ class LocalStore {
 
   Future<void> saveNickname(String nickname) async {
     await _prefs.setString(_kNickname, nickname);
+  }
+
+  /// 통화 발화 방식 — true(기본)=오픈마이크(상시 청취), false=눌러서 말하기(PTT).
+  bool get openMic => _prefs.getBool(_kOpenMic) ?? true;
+
+  Future<void> saveOpenMic(bool value) async {
+    await _prefs.setBool(_kOpenMic, value);
   }
 
   /// 로그아웃·탈퇴 — 토큰·프로필 제거 (온보딩에서 새로 로그인).
