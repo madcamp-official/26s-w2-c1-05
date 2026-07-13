@@ -221,7 +221,9 @@ async def local_login(body: LocalAuth):
     row = await pool.fetchrow(
         "SELECT id, nickname, password_hash FROM users"
         " WHERE provider='local' AND provider_id=$1", email)
-    if (row is None or not row["password_hash"]
+    if row is None:  # 계정 없음 — 클라가 회원가입으로 유도 (404 vs 401 구분)
+        raise HTTPException(404, "no account for this email")
+    if (not row["password_hash"]
             or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode())):
         raise HTTPException(401, "invalid email or password")
     await pool.execute("UPDATE users SET last_seen_at=now() WHERE id=$1", row["id"])
