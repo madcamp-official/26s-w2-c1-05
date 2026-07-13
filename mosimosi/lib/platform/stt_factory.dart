@@ -1,19 +1,13 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'impl/android_stt.dart';
-import 'impl/desktop_stt.dart';
 import 'impl/record_audio_recorder.dart';
+import 'impl/whisper_stt.dart';
 import 'stt_engine.dart';
 
-/// 플랫폼 감지로 STT 구현체 선택. 구현체 선택은 반드시 여기서만.
-SttEngine createSttEngine() {
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    return AndroidSttEngine();
-  }
-  // 데스크톱: record → WebSocket → 서버 faster-whisper.
-  return DesktopSttEngine(
-    whisperUrl: dotenv.env['WHISPER_WS_URL'] ?? '',
-    recorder: RecordAudioRecorder(),
-  );
-}
+/// STT 구현체는 이제 플랫폼 무관 단일 구현(record → WebSocket → 서버
+/// faster-whisper) — Android 온디바이스 STT는 폐지(오디오 릴레이·오픈마이크를
+/// 위해 raw PCM 캡처가 필요해 record 기반으로 통일).
+SttEngine createSttEngine() => WhisperSttEngine(
+      whisperUrl: dotenv.env['WHISPER_WS_URL'] ?? '',
+      recorder: RecordAudioRecorder(),
+    );

@@ -25,6 +25,10 @@ DEMO_SCENARIO = {
         "agent": "환불 없이 만족도 3점 이상으로 통화를 종료하세요.",
     },
     "rule_card": "고객이 소비자원 신고를 언급하면 접수 의무가 발생합니다.",
+    "opening_lines": {
+        "claimant": "3주째 환불이 안 되고 있는데요, 오늘은 확답을 듣고 싶어요.",
+        "agent": "안녕하세요, 고객센터입니다. 어떤 부분이 불편하셨는지 여쭤봐도 될까요?",
+    },
 }
 
 
@@ -84,6 +88,16 @@ class Room:
         for ws in list(self.sockets.values()):
             try:
                 await ws.send_text(json.dumps(msg, ensure_ascii=False))
+            except Exception:
+                pass
+
+    async def relay_audio(self, from_user_id: str, data: bytes) -> None:
+        """오디오 프레임 pass-through — 저장·가공 없이 상대에게만 즉시 전달 (Phase 2)."""
+        for uid, ws in list(self.sockets.items()):
+            if uid == from_user_id:
+                continue
+            try:
+                await ws.send_bytes(data)
             except Exception:
                 pass
 
@@ -264,6 +278,7 @@ async def create_room(a: dict, b: dict) -> Room:
             "role": role,
             "secret_goal": DEMO_SCENARIO["secrets"][role],
             "rule_card": DEMO_SCENARIO["rule_card"] if role == "agent" else None,
+            "opening_line": DEMO_SCENARIO["opening_lines"][role],
         }
     room_id = str(uuid.uuid4())
     room = Room(room_id, players)
@@ -292,7 +307,16 @@ async def room_ws(ws: WebSocket, room_id: str, user_id: str):
     room.sockets[user_id] = ws
     try:
         while True:
-            msg = json.loads(await ws.receive_text())
+            # receive_text()는 바이너리 프레임이 섞여 들어오면 KeyError로 죽으므로
+            # 저수준 receive()로 받아 타입별로 직접 분기한다.
+            raw = await ws.receive()
+            if raw["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect(raw.get("code", 1000), raw.get("reason"))
+            if raw.get("bytes") is not None:
+                # 오디오 프레임(Phase 2) — 저장·가공 없이 즉시 상대에게 전달
+                await room.relay_audio(user_id, raw["bytes"])
+                continue
+            msg = json.loads(raw["text"])
             match msg.get("type"):
                 case "ready":  # 브리핑 준비 완료 → 양측 완료 시 통화 시작
                     room.ready.add(user_id)

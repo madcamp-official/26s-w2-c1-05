@@ -40,6 +40,7 @@ async def match_ws(ws: WebSocket, user_id: str, nickname: str = "익명", form_f
                     "role": p["role"],
                     "secretGoal": p["secret_goal"],       # ★자기 몫만
                     "ruleCard": p["rule_card"],
+                    "openingLine": p["opening_line"],
                     "situation": "온라인 쇼핑몰 「급배송」 환불 분쟁. 민원인이 3주째 환불을 요구하고 있습니다.",
                     "opponent": {"nickname": other["nickname"], "formFactor": other["form_factor"]},
                 }, ensure_ascii=False))

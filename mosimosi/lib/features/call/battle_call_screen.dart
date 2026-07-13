@@ -12,8 +12,10 @@ import '../battle/battle_room.dart';
 import 'call_desktop.dart';
 
 /// 3.3 배틀 통화 화면 ★막다른 방 — B-lite 텍스트 릴레이(Phase 3 실배선).
-/// 내 STT 확정 텍스트 → /ws/room utterance → 서버 브로드캐스트가 단일 진실
-/// (양측 순서 일치), 상대 발화 수신 시 TtsEngine 재생. STT 불가 시 텍스트 폴백.
+/// 오픈마이크: 통화 시작 시 STT를 1회 start()하고 계속 스트리밍 — 서버(whisper)
+/// VAD가 0.8초 침묵마다 알아서 발화를 끊어 isFinal 결과를 순차로 내려주므로
+/// PTT 버튼 없이도 매 결과를 그대로 /ws/room utterance로 전송한다.
+/// 상대 발화 수신 시 TtsEngine 재생. STT 불가 시 텍스트 폴백.
 /// 기세 게이지는 인크리멘탈 심판(P1) 전까지 중립 고정, 관전 시점은 watch 화면 몫.
 class BattleCallScreen extends StatefulWidget {
   const BattleCallScreen({super.key, required this.roomId});
@@ -31,12 +33,14 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   Timer? _clock; // 통화 시간 표시용 1초 틱
 
   bool _sttAvailable = false;
-  bool _listening = false;
-  bool _awaitingFinal = false;
+  bool _micStarted = false; // 오픈마이크 1회성 시작 가드
+  bool _micActive = false;
   String _interim = '';
-  int _pttAtMs = 0; // PTT 누른 시점 (통화 시작 기준 ms — 규칙 #3)
   bool _secretOpen = false;
   bool _navigated = false;
+  bool _silenceTimerStarted = false; // 침묵 타이머 1회성 시작 가드
+  Timer? _silenceTimer;
+  bool _showOpeningPopup = false;
   final _fallbackController = TextEditingController();
 
   @override
@@ -53,12 +57,42 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     _stt = stt;
     _sttSub = stt.results.listen(_onSttResult);
     stt.initialize().then((ok) {
-      if (mounted) setState(() => _sttAvailable = ok);
+      if (!mounted) return;
+      setState(() => _sttAvailable = ok);
+      _maybeStartMic();
     });
+  }
+
+  /// 오픈마이크: STT 준비 + 통화 시작, 두 조건이 모두 갖춰지면 1회만 start().
+  void _maybeStartMic() {
+    final room = _room;
+    if (room == null || !room.inCall || !_sttAvailable || _micStarted) {
+      debugPrint('[BattleCall] _maybeStartMic 보류 — '
+          'room=${room != null} inCall=${room?.inCall} '
+          'sttAvailable=$_sttAvailable micStarted=$_micStarted');
+      return;
+    }
+    debugPrint('[BattleCall] _maybeStartMic → 실제 start() 호출');
+    _micStarted = true;
+    _micActive = true;
+    _stt!.start();
   }
 
   void _onRoom() {
     final room = _room!;
+    _maybeStartMic();
+    if (room.inCall && !_silenceTimerStarted) {
+      _silenceTimerStarted = true; // 통화 시작 시 1회만 시작
+      _silenceTimer = Timer(const Duration(seconds: 6), () {
+        // 6초 지나도 양쪽 다 아무 말 없으면 제안 첫마디 노출.
+        if (mounted && room.utterances.isEmpty) {
+          setState(() => _showOpeningPopup = true);
+        }
+      });
+    }
+    if (_showOpeningPopup && room.utterances.isNotEmpty) {
+      _showOpeningPopup = false; // 누구든 말을 시작하면 즉시 닫기
+    }
     if (room.ended && !_navigated) {
       _navigated = true; // judging 진입 즉시 결과 화면 (스피너 → verdict)
       if (mounted) context.go('/battle/${widget.roomId}/result');
@@ -70,6 +104,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   @override
   void dispose() {
     _clock?.cancel();
+    _silenceTimer?.cancel();
     _sttSub?.cancel();
     _stt?.stop();
     _room?.removeListener(_onRoom);
@@ -77,34 +112,14 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     super.dispose();
   }
 
-  // ================================================================ PTT
-  Future<void> _pressTalk() async {
-    final room = _room;
-    if (!_sttAvailable || room == null || !room.inCall) return;
-    _pttAtMs = room.elapsedMs;
-    _awaitingFinal = false;
-    setState(() {
-      _listening = true;
-      _interim = '';
-    });
-    await _stt!.start();
-  }
-
-  Future<void> _releaseTalk() async {
-    if (!_listening) return;
-    setState(() => _listening = false);
-    _awaitingFinal = true;
-    await _stt!.stop();
-  }
-
+  // ============================================================ 오픈마이크
+  /// 서버(whisper) VAD가 침묵마다 끊어주는 isFinal 결과를 그대로 전송 —
+  /// 클라 쪽에 별도 침묵판정·버튼 상호작용이 필요 없다.
   void _onSttResult(SttResult r) {
     if (!mounted) return;
     if (r.isFinal) {
       setState(() => _interim = '');
-      if (_awaitingFinal) {
-        _awaitingFinal = false;
-        _room?.sendUtterance(r.text, tStartMs: _pttAtMs);
-      }
+      _room?.sendUtterance(r.text, tStartMs: r.tStartMs);
     } else {
       setState(() => _interim = r.text);
     }
@@ -160,6 +175,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           _momentumHeader(room),
           _callerBlock(room),
           _secretChip(room),
+          if (_showOpeningPopup) _openingSuggestion(room),
           Expanded(child: _captionList(room)),
           _micStatus(room),
           if (room.state == 'disconnected') _disconnectedBar() else _playerControls(room),
@@ -328,9 +344,39 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     );
   }
 
+  /// 6초 침묵 후에도 발화가 없으면 노출 — 누군가 말을 시작하면 즉시 닫힘.
+  Widget _openingSuggestion(BattleRoomController room) {
+    final line = room.match.openingLine;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: YbsColor.amber400.withValues(alpha: 0.10),
+          border: Border.all(color: YbsColor.amber400.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(YbsRadius.md),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('첫마디를 시작해보세요!',
+                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.amber400)),
+            if (line.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('"$line"',
+                  style: const TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.textBody)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _captionList(BattleRoomController room) {
     final caps = room.utterances;
-    final showInterim = _listening || _interim.isNotEmpty;
+    final showInterim = _interim.isNotEmpty;
     // 전사 로그는 하단 고정 + 넘치면 스크롤(reverse).
     return SingleChildScrollView(
       reverse: true,
@@ -365,11 +411,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   Widget _micStatus(BattleRoomController room) {
     final label = !room.inCall
         ? '연결 중…'
-        : _listening
-            ? '듣는 중 — 떼면 전송'
-            : _sttAvailable
-                ? '버튼을 누르는 동안 말해요'
-                : '텍스트로 말하기 (STT 불가)';
+        : _sttAvailable
+            ? '듣고 있어요 — 편하게 말하세요'
+            : '텍스트로 말하기 (STT 불가)';
     return Padding(
       padding: const EdgeInsets.only(bottom: YbsSpace.s3),
       child: Center(
@@ -394,7 +438,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
                     padding: EdgeInsets.only(left: i == 0 ? 0 : 2),
                     child: Container(
                         width: 3,
-                        height: _listening ? 16 : 8,
+                        height: _micActive ? 16 : 8,
                         decoration: BoxDecoration(color: YbsColor.go400, borderRadius: BorderRadius.circular(2))),
                   ),
                 ),
@@ -424,40 +468,13 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             kind: CallButtonKind.endCall,
             onTap: room.hangUp,
           ),
-          const SizedBox(width: YbsSpace.s3),
-          Expanded(child: _sttAvailable ? _pttButton(room) : _textFallback(room)),
-        ],
-      ),
-    );
-  }
-
-  Widget _pttButton(BattleRoomController room) {
-    final enabled = room.inCall;
-    return GestureDetector(
-      onTapDown: enabled ? (_) => _pressTalk() : null,
-      onTapUp: enabled ? (_) => _releaseTalk() : null,
-      onTapCancel: enabled ? _releaseTalk : null,
-      child: Container(
-        height: 76,
-        decoration: BoxDecoration(
-          color: enabled ? YbsColor.go500 : YbsColor.ink700,
-          borderRadius: BorderRadius.circular(YbsRadius.lg),
-          border: Border.all(color: enabled ? YbsColor.go600 : YbsColor.borderStrong),
-          boxShadow: enabled ? [BoxShadow(color: YbsColor.goGlow, blurRadius: 24)] : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.mic, size: 24, color: enabled ? YbsColor.textOnGo : YbsColor.textSub),
-            const SizedBox(width: YbsSpace.s2 + 2),
-            Text(_listening ? '듣는 중 — 떼면 전송' : '누르는 동안 말하기',
-                style: TextStyle(
-                    fontFamily: YbsType.body,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: enabled ? YbsColor.textOnGo : YbsColor.textSub)),
+          // 오픈마이크: STT 가능하면 버튼 없이 상시 청취(_micStatus 배지가 상태 표시).
+          // STT 불가할 때만 텍스트 입력으로 대체.
+          if (!_sttAvailable) ...[
+            const SizedBox(width: YbsSpace.s3),
+            Expanded(child: _textFallback(room)),
           ],
-        ),
+        ],
       ),
     );
   }

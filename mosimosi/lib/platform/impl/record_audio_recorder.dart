@@ -8,6 +8,9 @@ class RecordAudioRecorder implements AudioRecorder {
   final rec.AudioRecorder _recorder = rec.AudioRecorder();
 
   @override
+  Future<bool> hasPermission() => _recorder.hasPermission();
+
+  @override
   Stream<List<int>> startChunks() async* {
     final stream = await _recorder.startStream(const rec.RecordConfig(
       encoder: rec.AudioEncoder.pcm16bits,

@@ -237,17 +237,21 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
             const Text('상대를 찾았어요!',
                 style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1.2, color: YbsColor.textHero)),
             const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                player(name: _myNickname, role: match.roleLabel, isMe: true),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: YbsSpace.s4 + 2),
-                  child: Text('VS',
-                      style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live500)),
-                ),
-                player(name: match.opponentNickname, role: match.opponentRoleLabel, isMe: false),
-              ],
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  player(name: _myNickname, role: match.roleLabel, isMe: true),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: YbsSpace.s4 + 2),
+                    child: Text('VS',
+                        style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live500)),
+                  ),
+                  player(name: match.opponentNickname, role: match.opponentRoleLabel, isMe: false),
+                ],
+              ),
             ),
             const SizedBox(height: 28),
             Container(
