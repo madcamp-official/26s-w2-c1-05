@@ -60,6 +60,48 @@ class TtsVoicePreset {
   final double? pitch;
 }
 
+/// 인트로 씬(메신저 스토리)의 메시지 한 건 (디자인 2a·IntroScene).
+/// 타이핑 인디케이터·도착 애니메이션은 화면이 재생 연출로 처리한다.
+enum IntroMessageKind { mine, minePhoto, friend, friendPhoto, system }
+
+class IntroMessage {
+  const IntroMessage({
+    required this.kind,
+    this.text = '',
+    this.caption = '', // 사진 메시지 설명
+    this.file = '', // 사진 파일명 표기
+    required this.time,
+  });
+
+  final IntroMessageKind kind;
+  final String text;
+  final String caption;
+  final String file;
+  final String time; // '오후 7:41'
+}
+
+/// 보스전 도입 스토리 — 메시지가 순차 재생되고 마지막에 고객센터 번호 +
+/// 발신 버튼으로 보스전에 진입한다 (디자인 2a).
+class IntroStory {
+  const IntroStory({
+    required this.friendName,
+    required this.contextLabel, // '3월 12일 · 택배 도착 직후'
+    required this.timeCapsule, // 대화 시작 시각 캡슐
+    required this.messages,
+    required this.callCardTitle, // '급배송 고객센터'
+    required this.phoneNumber, // '1588-0424'
+  });
+
+  final String friendName;
+  final String contextLabel;
+  final String timeCapsule;
+  final List<IntroMessage> messages;
+  final String callCardTitle;
+  final String phoneNumber;
+
+  String get friendInitial => friendName.substring(0, 1);
+}
+
 class Boss {
   const Boss({
     required this.id,
@@ -76,6 +118,7 @@ class Boss {
     required this.timeLimit,
     required this.difficulty,
     required this.voicePreset,
+    this.introStory,
   });
 
   final String id;
@@ -92,6 +135,7 @@ class Boss {
   final Duration timeLimit;
   final DifficultyParams difficulty;
   final TtsVoicePreset voicePreset;
+  final IntroStory? introStory; // null = 인트로 없이 바로 통화
 
   /// 판 시작 시 최종 시스템 프롬프트 조립 — 랜덤 변수(FSD 3.1.3) 주입.
   String buildSystemPrompt(List<String> variables) => [

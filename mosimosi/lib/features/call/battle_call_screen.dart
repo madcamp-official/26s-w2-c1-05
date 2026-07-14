@@ -38,6 +38,8 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   bool _micStarted = false; // 오픈마이크 1회성 시작 가드
   bool _micActive = false;
   final bool _openMic = LocalStore.instance.openMic; // 설정 — 통화 진입 시점 고정
+  final bool _showOpponentCaptions =
+      LocalStore.instance.showOpponentCaptions; // 설정 — 통화 진입 시점 고정
   String _interim = '';
   bool _secretOpen = false;
   bool _navigated = false;
@@ -186,6 +188,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
                 rightLabel: room.match.opponentNickname,
                 momentum: 0.5, // 실시간 기세는 인크리멘탈 심판(P1) 몫 — 중립 고정
                 mission: room.match.secretGoal,
+                showOpponentCaptions: _showOpponentCaptions,
               ),
             )
           : Scaffold(body: SafeArea(bottom: false, child: phone)),
@@ -459,7 +462,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   }
 
   Widget _captionList(BattleRoomController room) {
-    final caps = room.utterances;
+    final caps = room.utterances
+        .where((u) => _showOpponentCaptions || u.fromUserId == room.myUserId)
+        .toList();
     final showInterim = _interim.isNotEmpty;
     // 전사 로그는 하단 고정 + 넘치면 스크롤(reverse).
     return SingleChildScrollView(

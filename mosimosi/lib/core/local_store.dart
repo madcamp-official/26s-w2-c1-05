@@ -10,6 +10,7 @@ class LocalStore {
   static const _kNickname = 'nickname';
   static const _kToken = 'auth_token';
   static const _kOpenMic = 'open_mic';
+  static const _kShowOpponentCaptions = 'show_opponent_captions';
 
   static const _secure = FlutterSecureStorage(
       aOptions: AndroidOptions(encryptedSharedPreferences: true));
@@ -64,6 +65,14 @@ class LocalStore {
 
   Future<void> saveOpenMic(bool value) async {
     await _prefs.setBool(_kOpenMic, value);
+  }
+
+  /// 통화 중 상대방 자막 표시 여부 — 기본은 숨김.
+  bool get showOpponentCaptions =>
+      _prefs.getBool(_kShowOpponentCaptions) ?? false;
+
+  Future<void> saveShowOpponentCaptions(bool value) async {
+    await _prefs.setBool(_kShowOpponentCaptions, value);
   }
 
   /// 로그아웃·탈퇴 — 토큰·프로필 제거 (온보딩에서 새로 로그인).

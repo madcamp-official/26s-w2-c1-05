@@ -37,6 +37,8 @@ class _BossCallScreenState extends State<BossCallScreen> {
   Timer? _popupTimer;
   bool _navigated = false;
   bool _conditionsOpen = false;
+  final bool _showOpponentCaptions =
+      LocalStore.instance.showOpponentCaptions; // 설정 — 통화 진입 시점 고정
   final _fallbackController = TextEditingController();
 
   Boss? get _boss => bossById(widget.bossId);
@@ -301,7 +303,10 @@ class _BossCallScreenState extends State<BossCallScreen> {
 
   Widget _captionList(CallSessionController s) {
     // 모바일: 직전 2~3발화 + interim (IA §6 — 데스크톱 전체 로그는 우측 패널).
-    final spoken = s.transcript.where((u) => u.text.isNotEmpty).toList();
+    final spoken = s.transcript
+        .where((u) => u.text.isNotEmpty &&
+            (_showOpponentCaptions || u.speaker != 'boss'))
+        .toList();
     final recent = spoken.length > 3 ? spoken.sublist(spoken.length - 3) : spoken;
     final showInterim = s.listening || s.interim.isNotEmpty;
     return SingleChildScrollView(
@@ -584,7 +589,10 @@ class _BossCallScreenState extends State<BossCallScreen> {
   }
 
   Widget _captionLogPanel(CallSessionController s) {
-    final spoken = s.transcript.where((u) => u.text.isNotEmpty).toList();
+    final spoken = s.transcript
+        .where((u) => u.text.isNotEmpty &&
+            (_showOpponentCaptions || u.speaker != 'boss'))
+        .toList();
     return HudPanel(
       title: '캡션 로그',
       label: 'REC',

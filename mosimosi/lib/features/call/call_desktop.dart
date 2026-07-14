@@ -12,6 +12,7 @@ Widget buildCallDesktopStage({
   required String rightLabel,
   required double momentum,
   required String mission,
+  required bool showOpponentCaptions,
 }) {
   const panelText = TextStyle(fontSize: YbsType.sub, height: YbsType.leadingBody, color: YbsColor.textBody);
 
@@ -63,9 +64,11 @@ Widget buildCallDesktopStage({
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '네 고객센터입니다. 용건 말씀하세요.', textColor: YbsColor.textFaint),
+            if (showOpponentCaptions)
+              _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '네 고객센터입니다. 용건 말씀하세요.', textColor: YbsColor.textFaint),
             _LogLine(who: '나', whoColor: YbsColor.go400, text: '지난주 주문한 상품 환불 요청드립니다.', textColor: YbsColor.textFaint),
-            _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '환불은 안 됩니다. 규정이에요.', textColor: YbsColor.textSub),
+            if (showOpponentCaptions)
+              _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '환불은 안 됩니다. 규정이에요.', textColor: YbsColor.textSub),
             const _LogLine(who: '나', whoColor: YbsColor.go400, text: '어떤 규정인지 조항을 확인해 주시겠어요?', textColor: YbsColor.textBody),
           ],
         ),

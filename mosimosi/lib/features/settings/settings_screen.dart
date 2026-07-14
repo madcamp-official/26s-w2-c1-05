@@ -262,6 +262,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: const Text('켜면 버튼 없이 항상 듣고, 끄면 눌러서 말하기(PTT) — 다음 통화부터 적용',
                     style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
               ),
+              const Divider(height: 1, color: YbsColor.borderSoft),
+              SwitchListTile(
+                value: LocalStore.instance.showOpponentCaptions,
+                onChanged: (v) async {
+                  await LocalStore.instance.saveShowOpponentCaptions(v);
+                  if (mounted) setState(() {});
+                },
+                activeTrackColor: YbsColor.go600,
+                secondary: const Icon(Icons.closed_caption_outlined, size: 20, color: YbsColor.textSub),
+                title: const Text('상대방 자막', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textBody)),
+                subtitle: const Text('통화 중 상대방의 말을 텍스트로 표시해요 — 다음 통화부터 적용',
+                    style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+              ),
             ]),
             _section('데이터'),
             _card([

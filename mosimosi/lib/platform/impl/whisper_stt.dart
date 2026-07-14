@@ -86,6 +86,14 @@ class WhisperSttEngine implements SttEngine {
 
     _chunkCount = 0;
     final chunks = recorder.startChunks();
+    // 진단용 워치독 — 캡처 시작 3초 후에도 청크가 0개면 오디오 소스/권한 단계에서
+    // 조용히 실패했을 가능성이 크므로 명시적으로 남긴다(정상 캡처 동작엔 무영향).
+    Timer(const Duration(seconds: 3), () {
+      if (_chunkCount == 0 && _audioSub != null) {
+        debugPrint('[WhisperSttEngine] 경고: 시작 3초 후에도 오디오 청크 0개 — '
+            '마이크 캡처가 조용히 실패했을 가능성 (오디오 소스/권한 확인 필요)');
+      }
+    });
     _audioSub = chunks.listen(
       (bytes) {
         _rawAudio.add(bytes); // 실통화 릴레이 탭 — 뮤트보다 먼저 (통화는 전이중)
