@@ -85,3 +85,71 @@ Future<List<SessionRecord>> fetchSessions({int limit = 50}) async {
       SessionRecord.fromJson(r),
   ];
 }
+
+/// 전적 상세 발화 한 줄 (GET /users/me/sessions/{id}의 transcript 항목).
+class TranscriptLine {
+  const TranscriptLine({required this.speaker, required this.text, required this.tStartMs});
+
+  final String speaker; // 'user' | 'boss'
+  final String text;
+  final int tStartMs;
+
+  factory TranscriptLine.fromJson(Map<String, dynamic> j) => TranscriptLine(
+        speaker: j['speaker'] as String,
+        text: j['text'] as String,
+        tStartMs: (j['t_start_ms'] as num).round(),
+      );
+}
+
+/// 전적 상세 (GET /users/me/sessions/{id}) — 목록 요약(SessionRecord)과 달리
+/// 판정 리포트·트랜스크립트까지 포함. 판이 중간에 끊겼거나 심판 실패 시
+/// [judge]가 null일 수 있어 화면은 이를 반드시 대비해야 한다.
+class SessionDetail {
+  const SessionDetail({
+    required this.id,
+    required this.mode,
+    required this.bossId,
+    required this.startedAt,
+    required this.endedAt,
+    required this.result,
+    required this.score,
+    required this.judge,
+    required this.transcript,
+  });
+
+  final String id;
+  final String mode;
+  final String? bossId;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final String? result;
+  final int? score;
+  final Map<String, dynamic>? judge; // JudgeResult.fromJson으로 파싱 — null 가능
+  final List<TranscriptLine> transcript;
+
+  bool get win => result == 'win';
+
+  factory SessionDetail.fromJson(Map<String, dynamic> j) => SessionDetail(
+        id: j['id'] as String,
+        mode: j['mode'] as String,
+        bossId: j['boss_id'] as String?,
+        startedAt: DateTime.parse(j['started_at'] as String).toLocal(),
+        endedAt: j['ended_at'] == null
+            ? null
+            : DateTime.parse(j['ended_at'] as String).toLocal(),
+        result: j['result'] as String?,
+        score: (j['score'] as num?)?.round(),
+        judge: j['judge'] as Map<String, dynamic>?,
+        transcript: [
+          for (final t in (j['transcript'] as List? ?? const []))
+            if (t is Map<String, dynamic>) TranscriptLine.fromJson(t),
+        ],
+      );
+}
+
+/// 전적 상세 단건 조회 — 목록에서 세션을 눌렀을 때만 호출(목록 자체엔
+/// 트랜스크립트·판정을 안 실어 가볍게 유지).
+Future<SessionDetail> fetchSessionDetail(String sessionId) async {
+  final json = await GameServerClient().getJson('/users/me/sessions/$sessionId');
+  return SessionDetail.fromJson(json);
+}

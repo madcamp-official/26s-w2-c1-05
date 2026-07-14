@@ -1,23 +1,62 @@
 import 'package:flutter/material.dart';
 
+import '../../core/call/llm_tasks.dart';
+import '../../core/data/bosses.dart';
+import '../../services/player_records.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
-/// 4.2.1 판 상세 — 트랜스크립트 리플레이 + 당시 리포트. 목 데이터
-/// (Whisper 정제 트랜스크립트·DB는 P1.5/P2).
-class SessionDetailScreen extends StatelessWidget {
-  const SessionDetailScreen({super.key, required this.sessionId});
+/// 4.2.1 판 상세 — 트랜스크립트 리플레이 + 당시 리포트.
+/// GET /users/me/sessions/{id} 실데이터 사용. 판정 실패·중도 종료 판은
+/// judge가 없을 수 있어 화면이 반드시 이를 대비한다.
+class SessionDetailScreen extends StatefulWidget {
+  const SessionDetailScreen({super.key, required this.sessionId, this.fetcher = fetchSessionDetail});
 
   final String sessionId;
 
-  static const _lines = [
-    ('boss', '환불 상담원', '네 고객센터입니다. 용건 말씀하세요.', '00:02'),
-    ('user', '나', '지난주 주문한 이어폰이 불량이라 환불 요청드립니다.', '00:07'),
-    ('boss', '환불 상담원', '고객님, 환불은 안 됩니다. 규정이에요.', '00:13'),
-    ('user', '나', '그 규정이 몇 조 몇 항인지 확인해 주시겠어요?', '00:19'),
-    ('boss', '환불 상담원', '…규정 7조 2항, 단순 변심 환불 불가 조항입니다.', '00:26'),
-    ('user', '나', '변심이 아니라 하자잖아요. 환불 처리해 주세요.', '00:33'),
-  ];
+  /// 테스트에서 네트워크 없이 주입할 수 있도록 분리 (CloudTtsEngine과 동일 패턴).
+  final Future<SessionDetail> Function(String) fetcher;
+
+  @override
+  State<SessionDetailScreen> createState() => _SessionDetailScreenState();
+}
+
+class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  late Future<SessionDetail> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.fetcher(widget.sessionId);
+  }
+
+  String _title(SessionDetail d) {
+    if (d.mode == 'battle') return '전화 배틀';
+    final boss = bossesSeed.where((b) => b.id == d.bossId).map((b) => b.name).firstOrNull;
+    return boss ?? d.bossId ?? '보스전';
+  }
+
+  String _playedAt(SessionDetail d) {
+    final t = d.startedAt;
+    final now = DateTime.now();
+    final day = DateTime(t.year, t.month, t.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    final date = day == today
+        ? '오늘'
+        : day == today.subtract(const Duration(days: 1))
+            ? '어제'
+            : '${t.month}/${t.day}';
+    final duration = d.endedAt == null
+        ? ''
+        : ' · ${_mmss(d.endedAt!.difference(d.startedAt).inMilliseconds)}';
+    return '$date $hm$duration';
+  }
+
+  String _mmss(int ms) {
+    final s = ms ~/ 1000;
+    return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,66 +66,91 @@ class SessionDetailScreen extends StatelessWidget {
         title: const Text('판 상세', style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.bodyLg)),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(YbsSpace.s5),
-          children: [
-            // 요약 헤더
-            Container(
-              padding: const EdgeInsets.all(YbsSpace.s4),
-              decoration: BoxDecoration(
-                color: YbsColor.surfaceCard,
-                border: Border.all(color: YbsColor.gold500),
-                borderRadius: BorderRadius.circular(YbsRadius.lg),
-              ),
-              child: const Row(
-                children: [
-                  Text('WIN', style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.title, color: YbsColor.gold400)),
-                  SizedBox(width: YbsSpace.s4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('환불 불가 3연벙 상담원', style: TextStyle(fontSize: YbsType.bodyMd, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                        Text('보스전 · 오늘 21:04 · 02:41', style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
-                      ],
-                    ),
-                  ),
-                  Text('82점', style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.title, fontWeight: FontWeight.w600, color: YbsColor.textHero)),
-                ],
-              ),
-            ),
-            const SizedBox(height: YbsSpace.s6),
-            const Text('트랜스크립트 리플레이',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-            const SizedBox(height: YbsSpace.s3),
-            for (final l in _lines)
-              Padding(
-                padding: const EdgeInsets.only(bottom: YbsSpace.s3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: FutureBuilder<SessionDetail>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator(color: YbsColor.go400));
+            }
+            if (snap.hasError || snap.data == null) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: 44,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 20),
-                        child: Text(l.$4,
-                            style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, color: YbsColor.textFaint)),
-                      ),
-                    ),
-                    Expanded(
-                      child: LiveCaption(
-                        speaker: l.$1 == 'boss' ? CaptionSpeaker.boss : CaptionSpeaker.player,
-                        name: l.$2,
-                        text: l.$3,
-                      ),
+                    const Text('전적을 불러오지 못했어요', style: TextStyle(color: YbsColor.textSub)),
+                    const SizedBox(height: YbsSpace.s3),
+                    TextButton(
+                      onPressed: () => setState(() => _future = widget.fetcher(widget.sessionId)),
+                      child: const Text('다시 시도', style: TextStyle(color: YbsColor.go400)),
                     ),
                   ],
                 ),
+              );
+            }
+            return _body(snap.data!);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _body(SessionDetail d) {
+    final judge = d.judge == null ? null : JudgeResult.fromJson(d.judge!);
+    return ListView(
+      padding: const EdgeInsets.all(YbsSpace.s5),
+      children: [
+        _summaryHeader(d, judge),
+        const SizedBox(height: YbsSpace.s6),
+        const Text('트랜스크립트 리플레이',
+            style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+        const SizedBox(height: YbsSpace.s3),
+        if (d.transcript.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: YbsSpace.s4),
+            child: Text('저장된 대화 기록이 없어요', style: TextStyle(color: YbsColor.textFaint)),
+          )
+        else
+          for (final l in d.transcript)
+            Padding(
+              padding: const EdgeInsets.only(bottom: YbsSpace.s3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Text(_mmss(l.tStartMs),
+                          style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, color: YbsColor.textFaint)),
+                    ),
+                  ),
+                  Expanded(
+                    child: LiveCaption(
+                      speaker: l.speaker == 'boss' ? CaptionSpeaker.boss : CaptionSpeaker.player,
+                      name: l.speaker == 'boss' ? _title(d) : '나',
+                      text: l.text,
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: YbsSpace.s4),
-            const Text('당시 리포트',
-                style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-            const SizedBox(height: YbsSpace.s3),
+            ),
+        const SizedBox(height: YbsSpace.s4),
+        const Text('당시 리포트',
+            style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+        const SizedBox(height: YbsSpace.s3),
+        if (judge == null)
+          Container(
+            padding: const EdgeInsets.all(YbsSpace.s4),
+            decoration: BoxDecoration(
+              color: YbsColor.surfaceCard,
+              border: Border.all(color: YbsColor.borderSoft),
+              borderRadius: BorderRadius.circular(YbsRadius.md),
+            ),
+            child: const Text('이 판은 판정 리포트가 저장되지 않았어요 (중도 종료 등).',
+                style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint)),
+          )
+        else ...[
+          if (judge.oneLiner.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(YbsSpace.s4),
               decoration: BoxDecoration(
@@ -94,9 +158,10 @@ class SessionDetailScreen extends StatelessWidget {
                 border: Border.all(color: YbsColor.gold500),
                 borderRadius: BorderRadius.circular(YbsRadius.md),
               ),
-              child: const Text('오늘의 한마디 — 규정 조항을 콕 집어 물은 순간, 승부가 갈렸어요.',
-                  style: TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.gold300)),
+              child: Text('오늘의 한마디 — ${judge.oneLiner}',
+                  style: const TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.gold300)),
             ),
+          if (judge.deliveryNote.isNotEmpty) ...[
             const SizedBox(height: YbsSpace.s3),
             Container(
               padding: const EdgeInsets.all(YbsSpace.s4),
@@ -105,19 +170,54 @@ class SessionDetailScreen extends StatelessWidget {
                 border: Border.all(color: YbsColor.borderSoft),
                 borderRadius: BorderRadius.circular(YbsRadius.md),
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('“어…” 시작이 3회 있었어요',
-                      style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
-                  SizedBox(height: YbsSpace.s1),
-                  Text('→ 첫 마디는 용건부터: "환불 요청드립니다."',
-                      style: TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.go300)),
+                  Text('말하기 습관 · 군말 ${judge.fillerCount}회 · 침묵 ${judge.silenceCount}회',
+                      style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+                  const SizedBox(height: YbsSpace.s1),
+                  Text(judge.deliveryNote, style: const TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.textBody)),
                 ],
               ),
             ),
           ],
-        ),
+        ],
+      ],
+    );
+  }
+
+  Widget _summaryHeader(SessionDetail d, JudgeResult? judge) {
+    final resultLabel = d.result == null ? '진행중' : (d.win ? 'WIN' : 'LOSE');
+    final resultColor = d.result == null
+        ? YbsColor.textFaint
+        : (d.win ? YbsColor.gold400 : YbsColor.live400);
+    return Container(
+      padding: const EdgeInsets.all(YbsSpace.s4),
+      decoration: BoxDecoration(
+        color: YbsColor.surfaceCard,
+        border: Border.all(color: YbsColor.gold500),
+        borderRadius: BorderRadius.circular(YbsRadius.lg),
+      ),
+      child: Row(
+        children: [
+          Text(resultLabel, style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.title, color: resultColor)),
+          const SizedBox(width: YbsSpace.s4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_title(d),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: YbsType.bodyMd, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
+                Text('${d.mode == 'boss' ? '보스전' : '배틀'} · ${_playedAt(d)}',
+                    style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+              ],
+            ),
+          ),
+          Text(d.score == null ? '—' : '${d.score}점',
+              style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.title, fontWeight: FontWeight.w600, color: YbsColor.textHero)),
+        ],
       ),
     );
   }
