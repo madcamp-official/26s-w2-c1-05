@@ -483,27 +483,34 @@ class _BossIntroScreenState extends State<BossIntroScreen>
       children: [
         _avatar(story, size: 30, fontSize: 12),
         const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(story.friendName,
-                style:
-                    const TextStyle(fontSize: 11, color: YbsColor.textFaint)),
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 240),
-                  child: child,
-                ),
-                const SizedBox(width: 6),
-                Text(time,
-                    style: const TextStyle(
-                        fontSize: 10, color: YbsColor.textFaint)),
-              ],
-            ),
-          ],
+        // avatar+시간 라벨이 차지하는 폭을 뺀 나머지에만 맞도록 Flexible로
+        // 감싸지 않으면, 말풍선+시간 텍스트 합이 남은 폭을 미세하게 넘길 때
+        // RenderFlex 오버플로가 난다 (2026-07-14 확인).
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(story.friendName,
+                  style: const TextStyle(
+                      fontSize: 11, color: YbsColor.textFaint)),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 240),
+                      child: child,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(time,
+                      style: const TextStyle(
+                          fontSize: 10, color: YbsColor.textFaint)),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
