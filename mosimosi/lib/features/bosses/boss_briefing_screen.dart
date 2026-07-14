@@ -309,7 +309,10 @@ class BossBriefingScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         GestureDetector(
-          onTap: () => context.go('/bosses/${boss.id}/call'),
+          // 인트로 스토리(디자인 2a)가 있으면 스토리 → 발신 버튼 → 통화 순서.
+          onTap: () => context.go(boss.introStory != null
+              ? '/bosses/${boss.id}/intro'
+              : '/bosses/${boss.id}/call'),
           child: Container(
             height: 64,
             decoration: BoxDecoration(

@@ -6,6 +6,7 @@ import '../features/battle/battle_matching_screen.dart';
 import '../features/battle/battle_result_screen.dart';
 import '../features/battle/battle_watch_screen.dart';
 import '../features/bosses/boss_briefing_screen.dart';
+import '../features/bosses/boss_intro_screen.dart';
 import '../features/bosses/boss_list_screen.dart';
 import '../features/bosses/boss_result_screen.dart';
 import '../features/call/battle_call_screen.dart';
@@ -53,6 +54,12 @@ GoRouter buildRouter({required String initialLocation}) => GoRouter(
                 builder: (context, state) =>
                     BossBriefingScreen(bossId: state.pathParameters['id']!),
                 routes: [
+                  GoRoute(
+                    path: 'intro',
+                    parentNavigatorKey: _rootNavigatorKey, // 스토리 몰입 — GNB 숨김
+                    builder: (context, state) =>
+                        BossIntroScreen(bossId: state.pathParameters['id']!),
+                  ),
                   GoRoute(
                     path: 'call',
                     parentNavigatorKey: _rootNavigatorKey, // 막다른 방 — GNB 숨김

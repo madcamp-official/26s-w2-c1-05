@@ -32,6 +32,23 @@ final List<Boss> bossesSeed = [
     // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
     // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
     voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Charon', pace: 0.9),
+    // 인트로 씬 (디자인 2a 문법: 전화를 걸 수밖에 없어지는 메신저 스토리).
+    introStory: IntroStory(
+      friendName: '엄마',
+      contextLabel: '오늘 · 저녁 7시',
+      timeCapsule: '오후 6:58',
+      callCardTitle: '무던 치킨',
+      phoneNumber: '1577-0102',
+      messages: [
+        IntroMessage(kind: IntroMessageKind.friend, text: '엄마 오늘 회식이라 늦어~ 저녁 알아서 챙겨 먹어!', time: '오후 6:58'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '오예 그럼 치킨이다', time: '오후 6:59'),
+        IntroMessage(kind: IntroMessageKind.system, text: '[배달나라] 주문 폭주로 앱 주문이 일시 중단되었습니다. 매장 전화 주문은 가능합니다.', time: '오후 7:01'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '하필 오늘…?', time: '오후 7:01'),
+        IntroMessage(kind: IntroMessageKind.friend, text: 'ㅋㅋ 그냥 가게에 전화해서 시켜~ 금방이야', time: '오후 7:02'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '전화 주문… 뭐라고 말해야 하지', time: '오후 7:03'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '아니야, 할 수 있어. 메뉴랑 주소만 말하면 돼.', time: '오후 7:04'),
+      ],
+    ),
   ),
   const Boss(
     id: 'dental',
@@ -63,6 +80,21 @@ final List<Boss> bossesSeed = [
     // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
     // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
     voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Kore', pace: 1.15),
+    introStory: IntroStory(
+      friendName: '수민',
+      contextLabel: '오늘 · 점심시간',
+      timeCapsule: '오후 12:24',
+      callCardTitle: '따발 치과 접수실',
+      phoneNumber: '1644-2875',
+      messages: [
+        IntroMessage(kind: IntroMessageKind.friend, text: '너 어제부터 어금니 아프다더니, 병원은 갔어?', time: '오후 12:24'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '아직… 예약을 안 했어 ㅠ', time: '오후 12:25'),
+        IntroMessage(kind: IntroMessageKind.friend, text: '거기 잘하는 데는 당일 예약은 전화로만 받던데?', time: '오후 12:25'),
+        IntroMessage(kind: IntroMessageKind.system, text: '[따발 치과] 당일 진료 예약은 전화 접수만 가능합니다. 점심시간에도 접수 가능.', time: '오후 12:26'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '접수원분 말 엄청 빠르다던데…', time: '오후 12:27'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '이 아픈 게 더 무섭다. 지금 전화하자.', time: '오후 12:28'),
+      ],
+    ),
   ),
   const Boss(
     id: 'refund',
@@ -95,6 +127,25 @@ final List<Boss> bossesSeed = [
     // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
     // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
     voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Aoede', pace: 1.0),
+    // 디자인 2a 원안 스토리 (IntroScene.dc.html 그대로).
+    introStory: IntroStory(
+      friendName: '지우',
+      contextLabel: '3월 12일 · 택배 도착 직후',
+      timeCapsule: '오후 7:41',
+      callCardTitle: '급배송 고객센터',
+      phoneNumber: '1588-0424',
+      messages: [
+        IntroMessage(kind: IntroMessageKind.mine, text: '드디어 택배 왔다!', time: '오후 7:41'),
+        IntroMessage(kind: IntroMessageKind.minePhoto, caption: '도착한 상품 · 실물', file: 'IMG_2039.jpg', time: '오후 7:41'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '…근데 사진이랑 너무 다른데?', time: '오후 7:42'),
+        IntroMessage(kind: IntroMessageKind.friend, text: '환불하면 되지 않아?', time: '오후 7:42'),
+        IntroMessage(kind: IntroMessageKind.friendPhoto, caption: '쇼핑몰 상세페이지 캡처', file: 'screenshot_0312.png', time: '오후 7:43'),
+        IntroMessage(kind: IntroMessageKind.friend, text: '상세페이지엔 이렇게 나와 있는데? ㅋㅋ 완전 다르네', time: '오후 7:43'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '이미 뜯었는데 괜찮으려나…', time: '오후 7:44'),
+        IntroMessage(kind: IntroMessageKind.system, text: '개봉한 상품은 환불이 제한될 수 있습니다. 자세한 내용은 고객센터로 문의해 주세요.', time: '오후 7:44'),
+        IntroMessage(kind: IntroMessageKind.mine, text: '일단 고객센터에 전화해 봐야겠다.', time: '오후 7:45'),
+      ],
+    ),
   ),
 ];
 
