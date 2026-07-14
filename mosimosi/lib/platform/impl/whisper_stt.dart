@@ -22,6 +22,8 @@ class WhisperSttEngine implements SttEngine {
 
   final StreamController<SttResult> _controller =
       StreamController<SttResult>.broadcast();
+  final StreamController<List<int>> _rawAudio =
+      StreamController<List<int>>.broadcast();
 
   WebSocketChannel? _channel;
   StreamSubscription<List<int>>? _audioSub;
@@ -30,6 +32,9 @@ class WhisperSttEngine implements SttEngine {
 
   @override
   Stream<SttResult> get results => _controller.stream;
+
+  @override
+  Stream<List<int>> get rawAudio => _rawAudio.stream;
 
   @override
   bool get isAvailable => _available;
@@ -53,6 +58,16 @@ class WhisperSttEngine implements SttEngine {
   }
 
   int _chunkCount = 0; // 진단용 — 얼마나 자주 로그를 남길지 조절
+  bool _muted = false; // 반이중 에코 게이트 — true면 청크 전송 차단
+
+  @override
+  void setMuted(bool muted) {
+    if (_muted == muted) return;
+    _muted = muted;
+    // 뮤트 진입 시 서버의 진행 중 분절을 폐기 — 직전에 새어 들어간
+    // TTS 꼬리가 발화로 전사되는 것 방지.
+    if (muted) _channel?.sink.add(jsonEncode({'event': 'cancel'}));
+  }
 
   @override
   Future<void> start() async {
@@ -73,6 +88,8 @@ class WhisperSttEngine implements SttEngine {
     final chunks = recorder.startChunks();
     _audioSub = chunks.listen(
       (bytes) {
+        _rawAudio.add(bytes); // 실통화 릴레이 탭 — 뮤트보다 먼저 (통화는 전이중)
+        if (_muted) return; // 에코 게이트 — TTS 재생 중 whisper 전송만 차단
         _chunkCount++;
         if (_chunkCount == 1 || _chunkCount % 50 == 0) {
           debugPrint('[WhisperSttEngine] 오디오 청크 #$_chunkCount (${bytes.length} bytes) 전송');

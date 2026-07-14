@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/local_store.dart';
 import '../../platform/stt_engine.dart';
 import '../../platform/stt_factory.dart';
 import '../../ui/breakpoints.dart';
@@ -30,17 +31,22 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   BattleRoomController? _room;
   SttEngine? _stt;
   StreamSubscription<SttResult>? _sttSub;
+  StreamSubscription<List<int>>? _audioUplink; // 내 마이크 PCM → 방 릴레이 (실통화)
   Timer? _clock; // 통화 시간 표시용 1초 틱
 
   bool _sttAvailable = false;
   bool _micStarted = false; // 오픈마이크 1회성 시작 가드
   bool _micActive = false;
+  final bool _openMic = LocalStore.instance.openMic; // 설정 — 통화 진입 시점 고정
   String _interim = '';
   bool _secretOpen = false;
   bool _navigated = false;
   bool _silenceTimerStarted = false; // 침묵 타이머 1회성 시작 가드
   Timer? _silenceTimer;
   bool _showOpeningPopup = false;
+  int _seenJudgeSeq = 0; // 인크리멘탈 판정 팝업 트리거
+  String? _judgePopup;
+  Timer? _judgePopupTimer;
   final _fallbackController = TextEditingController();
 
   @override
@@ -56,6 +62,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     final stt = createSttEngine();
     _stt = stt;
     _sttSub = stt.results.listen(_onSttResult);
+    // 실통화 업링크: 캡처 원본을 방 소켓으로 (sendAudio가 in_call 전엔 무시).
+    // 오픈마이크는 상시, PTT는 버튼 누른 동안만 캡처가 흘러 자연히 구간 전송이 된다.
+    _audioUplink = stt.rawAudio.listen((bytes) => _room?.sendAudio(bytes));
     stt.initialize().then((ok) {
       if (!mounted) return;
       setState(() => _sttAvailable = ok);
@@ -64,8 +73,10 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   }
 
   /// 오픈마이크: STT 준비 + 통화 시작, 두 조건이 모두 갖춰지면 1회만 start().
+  /// PTT 모드(설정)에선 자동 시작 없음 — 버튼이 start/stop을 소유.
   void _maybeStartMic() {
     final room = _room;
+    if (!_openMic) return;
     if (room == null || !room.inCall || !_sttAvailable || _micStarted) {
       debugPrint('[BattleCall] _maybeStartMic 보류 — '
           'room=${room != null} inCall=${room?.inCall} '
@@ -93,6 +104,18 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     if (_showOpeningPopup && room.utterances.isNotEmpty) {
       _showOpeningPopup = false; // 누구든 말을 시작하면 즉시 닫기
     }
+    // 인크리멘탈 판정 도착 — 이벤트가 있으면 2.5초 팝업 (FSD §4.3).
+    if (room.judgeSeq != _seenJudgeSeq) {
+      _seenJudgeSeq = room.judgeSeq;
+      final event = room.judgeEvent;
+      if (event != null && event.isNotEmpty) {
+        _judgePopupTimer?.cancel();
+        _judgePopup = event;
+        _judgePopupTimer = Timer(const Duration(milliseconds: 2500), () {
+          if (mounted) setState(() => _judgePopup = null);
+        });
+      }
+    }
     if (room.ended && !_navigated) {
       _navigated = true; // judging 진입 즉시 결과 화면 (스피너 → verdict)
       if (mounted) context.go('/battle/${widget.roomId}/result');
@@ -105,7 +128,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   void dispose() {
     _clock?.cancel();
     _silenceTimer?.cancel();
+    _judgePopupTimer?.cancel();
     _sttSub?.cancel();
+    _audioUplink?.cancel();
     _stt?.stop();
     _room?.removeListener(_onRoom);
     _fallbackController.dispose();
@@ -176,7 +201,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           _callerBlock(room),
           _secretChip(room),
           if (_showOpeningPopup) _openingSuggestion(room),
+          if (_judgePopup != null) _judgeEventBanner(),
           Expanded(child: _captionList(room)),
+          _coachHint(room),
           _micStatus(room),
           if (room.state == 'disconnected') _disconnectedBar() else _playerControls(room),
         ],
@@ -210,14 +237,15 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          _tugBar(),
+          _tugBar(room),
         ],
       ),
     );
   }
 
-  /// 실시간 기세 미지원(P1) — 중립 50:50 표시.
-  Widget _tugBar() {
+  /// 실시간 기세 줄다리기 — 인크리멘탈 심판(FSD §4.2)의 momentum을 애니메이션 반영.
+  /// 중간 판정은 참고 지표(최종 승패는 종료 후 정밀 심판)라 5~95%로만 움직인다.
+  Widget _tugBar(BattleRoomController room) {
     return SizedBox(
       height: 12,
       child: Stack(
@@ -229,13 +257,18 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: YbsColor.go500,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(YbsRadius.full)),
-                  boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 14)],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: (room.myMomentum / 100).clamp(0.05, 0.95)),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, factor, _) => FractionallySizedBox(
+                widthFactor: factor,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: YbsColor.go500,
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(YbsRadius.full)),
+                    boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 14)],
+                  ),
                 ),
               ),
             ),
@@ -243,6 +276,57 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           Align(
             alignment: Alignment.center,
             child: Container(width: 3, height: 12, decoration: BoxDecoration(color: YbsColor.white, borderRadius: BorderRadius.circular(2))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 인크리멘탈 심판 이벤트 팝업 — "규칙 카드 발동!" 등, 2.5초 자동 소멸.
+  Widget _judgeEventBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3),
+        decoration: BoxDecoration(
+          color: YbsColor.gold400.withValues(alpha: 0.12),
+          border: Border.all(color: YbsColor.gold400.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(YbsRadius.md),
+          boxShadow: [BoxShadow(color: YbsColor.gold400.withValues(alpha: 0.18), blurRadius: 20)],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.flash_on, size: 20, color: YbsColor.gold400),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Expanded(
+              child: Text(_judgePopup!,
+                  style: const TextStyle(
+                      fontSize: YbsType.sub, fontWeight: FontWeight.w800, color: YbsColor.gold400)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// AI 코치 귓속말 — 본인 전용 한 줄 (서버가 내 몫만 보내줌, FSD §4.3).
+  Widget _coachHint(BattleRoomController room) {
+    if (room.myHint.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, 0, YbsSpace.s5, YbsSpace.s2 + 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.tips_and_updates_outlined, size: 14, color: YbsColor.amber400),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(room.myHint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: YbsType.micro, height: 1.4, color: YbsColor.textSub)),
           ),
         ],
       ),
@@ -409,6 +493,8 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   }
 
   Widget _micStatus(BattleRoomController room) {
+    // PTT 모드에선 하단 버튼이 상태를 표시 — 필 생략.
+    if (_sttAvailable && !_openMic) return const SizedBox.shrink();
     final label = !room.inCall
         ? '연결 중…'
         : _sttAvailable
@@ -469,12 +555,59 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             onTap: room.hangUp,
           ),
           // 오픈마이크: STT 가능하면 버튼 없이 상시 청취(_micStatus 배지가 상태 표시).
-          // STT 불가할 때만 텍스트 입력으로 대체.
+          // PTT 설정 시 누르는 동안 말하기 버튼. STT 불가할 때만 텍스트 입력으로 대체.
           if (!_sttAvailable) ...[
             const SizedBox(width: YbsSpace.s3),
             Expanded(child: _textFallback(room)),
+          ] else if (!_openMic) ...[
+            const SizedBox(width: YbsSpace.s3),
+            Expanded(child: _pttButton(room)),
           ],
         ],
+      ),
+    );
+  }
+
+  /// PTT(설정: 오픈마이크 꺼짐): 누르면 캡처 시작, 떼면 stop → 서버가 버퍼를
+  /// 강제 flush해 isFinal 결과가 오고, _onSttResult가 그대로 전송한다.
+  void _pttDown(BattleRoomController room) {
+    if (!room.inCall || _micActive) return;
+    setState(() => _micActive = true);
+    _stt?.start();
+  }
+
+  void _pttUp() {
+    if (!_micActive) return;
+    setState(() => _micActive = false);
+    _stt?.stop();
+  }
+
+  Widget _pttButton(BattleRoomController room) {
+    return GestureDetector(
+      onTapDown: (_) => _pttDown(room),
+      onTapUp: (_) => _pttUp(),
+      onTapCancel: _pttUp,
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: YbsColor.go500,
+          borderRadius: BorderRadius.circular(YbsRadius.lg),
+          border: Border.all(color: YbsColor.go600),
+          boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 24)],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mic, size: 24, color: YbsColor.textOnGo),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Text(_micActive ? '듣는 중 — 떼면 전송' : '누르는 동안 말하기',
+                style: const TextStyle(
+                    fontFamily: YbsType.body,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: YbsColor.textOnGo)),
+          ],
+        ),
       ),
     );
   }

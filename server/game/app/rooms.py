@@ -33,14 +33,16 @@ DEMO_SCENARIO = {
 }
 
 
-async def _run_judge_llm(prompt: str) -> str:
-    """llm.py 프록시 파이프라인 인프로세스 재사용 (task=final_judge → 백엔드 분기).
-    /llm/chat을 우회하므로 llm_logs 기록도 여기서 동일하게 남긴다(QLoRA 데이터)."""
+async def _run_judge_llm(prompt: str, task: str = "final_judge",
+                         max_output_tokens: int = 1024) -> str:
+    """llm.py 프록시 파이프라인 인프로세스 재사용 (task별 백엔드 분기 —
+    final_judge=Gemini, incremental=vLLM). /llm/chat을 우회하므로 llm_logs
+    기록도 여기서 동일하게 남긴다(QLoRA 데이터)."""
     req = llm.ChatRequest(
-        task="final_judge",
+        task=task,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
-        max_output_tokens=1024,
+        max_output_tokens=max_output_tokens,
     )
     backend = llm._backend_for(req.task)
     stream = llm._stream_vllm(req) if backend == "vllm" else llm._stream_gemini(req)
@@ -81,6 +83,13 @@ class Room:
         self.time_limit_s = 300
         self._timer: asyncio.Task | None = None
         self.utterances: list[dict] = []  # 최종 심판용 인메모리 트랜스크립트
+        # ---- 인크리멘탈 심판 (FSD §4.2) — 실시간 기세·이벤트·코치 ----
+        self.momentum_agent = 50          # agent 관점 0~100 (claimant = 100-값)
+        self.judge_seq = 0
+        self._judge_events_fired: list[str] = []  # 프롬프트 누적 상태 (이벤트 반복 방지)
+        self._judged_upto = 0             # 심판에 반영된 utterances 개수
+        self._judge_task: asyncio.Task | None = None
+        self._judge_loop: asyncio.Task | None = None
 
     def t_ms(self) -> int:
         return 0 if self.started_at is None else int((time.monotonic() - self.started_at) * 1000)
@@ -115,6 +124,7 @@ class Room:
             await db.pool.execute(
                 "UPDATE battle_rooms SET started_at=now() WHERE id=$1", uuid.UUID(self.id))
         self._timer = asyncio.create_task(self._time_limit())
+        self._judge_loop = asyncio.create_task(self._incremental_ticker())
 
     async def _time_limit(self) -> None:
         await asyncio.sleep(self.time_limit_s)
@@ -126,11 +136,113 @@ class Room:
             return
         if self._timer:
             self._timer.cancel()
+        if self._judge_loop:
+            self._judge_loop.cancel()
+        if self._judge_task and not self._judge_task.done():
+            self._judge_task.cancel()  # 최종 심판 중 게이지 갱신 방지
         await self.set_state("judging")
         verdict = await self._judge()  # 실패 시 무승부 폴백 — done은 반드시 도달
         await self.broadcast({"type": "verdict", **verdict})
         await self._record(verdict)
         await self.set_state("done")
+
+    # ------------------------------------------------------------ 인크리멘탈 심판
+    # FSD §4.2: 새 발화 3개 누적 또는 20초 경과(신규 1개 이상) 시 경량 심판(vLLM).
+    # 통화를 막지 않는 비동기 사이드 채널 — 실패해도 게임 진행에 영향 없음.
+    async def _incremental_ticker(self) -> None:
+        while self.state == "in_call":
+            await asyncio.sleep(20)
+            self.maybe_incremental(min_new=1, silence_ok=True)
+
+    def maybe_incremental(self, min_new: int = 3, silence_ok: bool = False) -> None:
+        if self.state != "in_call":
+            return
+        if self._judge_task and not self._judge_task.done():
+            return  # 단일 비행 — 심판 호출 중첩 방지
+        new = len(self.utterances) - self._judged_upto
+        # silence_ok(20초 틱): 신규 발화 0개여도 대화가 시작된 뒤라면 침묵 자체를
+        # 심판에 넘긴다 — "버티기 전략 실시간 처벌" (FSD §4.3 게이지 목적).
+        if new < min_new and not (silence_ok and new == 0 and self.utterances):
+            return
+        self._judge_task = asyncio.create_task(self._incremental_judge())
+
+    async def _incremental_judge(self) -> None:
+        upto = len(self.utterances)
+        delta_utts = self.utterances[self._judged_upto:upto]
+        try:
+            raw = await _run_judge_llm(
+                self._incremental_prompt(delta_utts), task="incremental",
+                max_output_tokens=256)
+            j = _extract_json(raw)
+            if not j:
+                return  # 파싱 실패 — 이번 델타는 다음 심판에 이월
+        except Exception:
+            return
+        if self.state != "in_call":  # 심판 중 통화가 끝났으면 폐기
+            return
+        self._judged_upto = upto
+        delta = max(-15, min(15, int(j.get("momentumDelta") or 0)))
+        # 중간 판정은 5~95로 clamp — 완승/완패 확정은 최종 심판 몫 (FSD §4.4)
+        self.momentum_agent = max(5, min(95, self.momentum_agent + delta))
+        event = (j.get("event") or "").strip() or None
+        if event:
+            self._judge_events_fired.append(event)
+        self.judge_seq += 1
+        at_ms = self.t_ms()
+        # 개인화 전송 — 힌트는 본인 몫만 (규칙 #2: 상대 비밀 누설 금지 이중 방어)
+        for uid, ws in list(self.sockets.items()):
+            role = self.players[uid]["role"]
+            try:
+                await ws.send_text(json.dumps({
+                    "type": "judge",
+                    "seq": self.judge_seq,
+                    "atMs": at_ms,
+                    "momentum": self.momentum_agent if role == "agent"
+                                else 100 - self.momentum_agent,
+                    "event": event,
+                    "hint": (j.get("hintAgent") if role == "agent"
+                             else j.get("hintClaimant")) or "",
+                    "caster": j.get("caster") or "",  # 당사자 화면은 미표시 (관전용)
+                }, ensure_ascii=False))
+            except Exception:
+                pass
+        if db.pool:  # 관전 리플레이·판정 시비 대응 기록 (P1 테이블)
+            await db.pool.execute(
+                "INSERT INTO judge_events (room_id, seq, at_ms, payload) VALUES ($1,$2,$3,$4)",
+                uuid.UUID(self.id), self.judge_seq, at_ms,
+                json.dumps({
+                    "momentum_agent": self.momentum_agent, "delta": delta,
+                    "event": event, "hint_agent": j.get("hintAgent"),
+                    "hint_claimant": j.get("hintClaimant"), "caster": j.get("caster"),
+                }, ensure_ascii=False))
+
+    def _incremental_prompt(self, delta_utts: list[dict]) -> str:
+        agent = self.players[self._role_uid("agent")]
+        claimant = self.players[self._role_uid("claimant")]
+        log = "\n".join(
+            f"({u['t_start_ms'] // 1000}s) {u['role']}: {u['text']}" for u in delta_utts) \
+            or "(지난 20초간 아무도 발화하지 않음 — 침묵이 이어지고 있다)"
+        fired = ", ".join(self._judge_events_fired[-5:]) or "없음"
+        return f"""너는 전화 배틀 게임 '여보세요'의 실시간 심판이다. 방금 오간 발화만 보고 즉각 판정해 JSON만 출력해라.
+
+[공통 상황] {DEMO_SCENARIO['situation']}
+[agent(상담원) 비밀 목표] {agent['secret_goal']}
+[agent 규칙 카드] {agent['rule_card']}
+[claimant(민원인) 비밀 목표] {claimant['secret_goal']}
+[현재 기세] agent {self.momentum_agent} : claimant {100 - self.momentum_agent}
+[이미 발동된 이벤트] {fired}
+[새 발화] (초 발화자: 내용)
+{log}
+
+규칙:
+- momentumDelta: -15~15 정수, agent 관점(+는 agent 우세). 설득 우위를 가져간 쪽으로. 특기할 것 없으면 0.
+- 침묵 턴(새 발화 없음)이면: 시간을 끌어 이득을 보는 쪽·대화를 회피하는 쪽에 -5~-2 수준의 페널티를 줘라 (버티기는 승리 전략이 아니다). 힌트로 침묵을 깰 첫마디를 제안해라.
+- event: 이번 발화에서 결정적 순간이 있을 때만 6자 내외 한 문구("규칙 카드 발동!", "논리 클린히트!", "감정 폭발 페널티"). 이미 발동된 이벤트와 중복 금지. 없으면 null.
+- hintAgent / hintClaimant: 각자에게 주는 한 줄 화술 코치. ★상대의 비밀 목표·규칙 카드 내용을 절대 누설하지 마라.
+- caster: 관전자용 실황 중계 한 줄 (양쪽 비밀 미포함, 스포츠 캐스터 톤).
+
+출력 JSON (다른 텍스트 금지):
+{{"momentumDelta": 0, "event": null, "hintAgent": "…", "hintClaimant": "…", "caster": "…"}}"""
 
     # ---------------------------------------------------------------- 최종 심판
     def _role_uid(self, role: str) -> str | None:
@@ -216,11 +328,13 @@ class Room:
 [agent(상담원) 비밀 목표] {agent['secret_goal']}
 [agent 규칙 카드] {agent['rule_card']}
 [claimant(민원인) 비밀 목표] {claimant['secret_goal']}
+[통화 중 실시간 심판이 포착한 이벤트] {", ".join(self._judge_events_fired) or "없음"}
 [통화 기록] (mm:ss 발화자: 내용)
 {log}
 
 평가 규칙:
 - 과정 점수로 판정해라 — 시간 끌기·버티기는 승리 전략이 아니다.
+- [실시간 이벤트]는 통화 중 심판이 포착한 결정적 순간들이다 — 판정 근거로 활용하되, 최종 판단은 전체 통화 기록을 직접 보고 내려라.
 - 각 플레이어의 비밀 목표 달성 여부(goalAchieved)를 실제 대사 근거로 판단하고, goalNote에 근거를 한 줄로.
 - agent의 ruleNote에는 규칙 카드 발동·대응 여부를 한 줄로 (발동 안 했으면 "발동 없음").
 - rubric은 역할에 맞는 항목 2~3개 (label, score 1~5, comment는 실제 대사 인용 포함).
@@ -347,7 +461,7 @@ async def room_ws(ws: WebSocket, room_id: str, token: str):
                             "INSERT INTO utterances (room_id, speaker_user, speaker, text, t_start_ms)"
                             " VALUES ($1,$2,'user',$3,$4)",
                             uuid.UUID(room_id), uuid.UUID(user_id), utt["text"], utt["tStartMs"])
-                    # TODO(P1): 발화 3~4개 누적 or 20초 경과 시 인크리멘탈 심판 트리거 (FSD §4.2)
+                    room.maybe_incremental()  # 발화 3개 누적 시 실시간 심판 (FSD §4.2)
                 case "hang_up":
                     await room.end_call()
     except WebSocketDisconnect:

@@ -16,7 +16,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   double _ttsRate = 0.5;
-  bool _autoTurn = false;
   String? _accountLabel; // '{email} · Google' — GET /users/me 성공 시
 
   @override
@@ -252,12 +251,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               SwitchListTile(
-                value: _autoTurn,
-                onChanged: (v) => setState(() => _autoTurn = v),
+                value: LocalStore.instance.openMic,
+                onChanged: (v) async {
+                  await LocalStore.instance.saveOpenMic(v);
+                  if (mounted) setState(() {});
+                },
                 activeTrackColor: YbsColor.go600,
                 secondary: const Icon(Icons.record_voice_over_outlined, size: 20, color: YbsColor.textSub),
-                title: const Text('자동 턴 감지', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textBody)),
-                subtitle: const Text('말이 끝나면 자동으로 전송 (준비 중)',
+                title: const Text('오픈마이크', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textBody)),
+                subtitle: const Text('켜면 버튼 없이 항상 듣고, 끄면 눌러서 말하기(PTT) — 다음 통화부터 적용',
                     style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
               ),
             ]),
