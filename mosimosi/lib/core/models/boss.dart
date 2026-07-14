@@ -41,7 +41,10 @@ const String bossCommonRules = '''
 /// 도감 티어 (디자인: normal=슬레이트, rare=스카이, boss=레드, legend=골드).
 enum BossTier { normal, rare, boss, legend }
 
-/// 보스전 TTS 보이스 프리셋 (Google Cloud TTS `/tts/synthesize` 서버 프록시용).
+/// 보스전 TTS 보이스 프리셋 (`/tts/synthesize` 서버 프록시용).
+/// 서버가 [voiceName]을 보고 Qwen3-TTS(omni) 화자로 매핑해 우선 시도하고,
+/// 실패 시에만 아래 Chirp3 HD 필드(폴백 안전망)로 합성한다 — Qwen 화자/속도/
+/// 감정지시는 서버의 매핑 테이블에서 관리하므로 클라이언트 변경 없이 튜닝된다.
 /// [voiceName]은 `ko-KR-Chirp3-HD-*` 등 Cloud TTS voice 리소스명 그대로.
 /// [pace]는 speakingRate(0.25~2.0, 1.0=기본 속도). [pitch]는 semitone(-20~20)이며
 /// Chirp3 HD는 pitch를 지원하지 않아 서버에서 무시된다 — Neural2 폴백 보이스 전용.
