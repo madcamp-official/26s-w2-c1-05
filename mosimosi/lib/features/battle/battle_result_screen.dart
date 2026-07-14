@@ -130,7 +130,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
                     label: '재매칭',
                     size: YbsButtonSize.lg,
                     fullWidth: true,
-                    onTap: () => _leave('/battle'),
+                    onTap: () => _leave('/battle/matching'),
                   ),
                 ),
                 const SizedBox(width: YbsSpace.s2 + 2),

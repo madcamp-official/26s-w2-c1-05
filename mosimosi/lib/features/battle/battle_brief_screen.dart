@@ -56,7 +56,7 @@ class _BattleBriefScreenState extends State<BattleBriefScreen> {
             children: [
               const Text('배틀 세션이 만료됐어요', style: TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
               const SizedBox(height: YbsSpace.s4),
-              YbsButton(label: '다시 매칭하기', onTap: () => context.go('/battle')),
+              YbsButton(label: '다시 매칭하기', onTap: () => context.go('/battle/matching')),
             ],
           ),
         ),

@@ -260,7 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _battleModeCardMobile(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/battle'),
+      onTap: () => context.go('/battle'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5, vertical: 22),
         decoration: BoxDecoration(
@@ -465,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final accent = boss ? YbsColor.live500 : YbsColor.go500;
     final r = _battleRecord;
     return GestureDetector(
-      onTap: () => boss ? context.go('/bosses') : context.push('/battle'),
+      onTap: () => boss ? context.go('/bosses') : context.go('/battle'),
       child: Container(
         padding: const EdgeInsets.fromLTRB(28, 32, 28, 32),
         decoration: BoxDecoration(
@@ -532,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 YbsButton(
                   label: boss ? '도전하기' : '매칭 시작',
                   variant: boss ? YbsButtonVariant.danger : YbsButtonVariant.primary,
-                  onTap: () => boss ? context.go('/bosses') : context.push('/battle'),
+                  onTap: () => boss ? context.go('/bosses') : context.go('/battle'),
                 ),
               ],
             ),

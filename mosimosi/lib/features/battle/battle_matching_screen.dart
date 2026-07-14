@@ -122,7 +122,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
         children: [
           Text(_error!, style: const TextStyle(fontSize: YbsType.bodyLg, color: YbsColor.textBody)),
           const SizedBox(height: YbsSpace.s5),
-          YbsButton(label: '홈으로', variant: YbsButtonVariant.ghost, onTap: () => context.go('/home')),
+          YbsButton(label: '로비로', variant: YbsButtonVariant.ghost, onTap: () => context.go('/battle')),
         ],
       ),
     );
@@ -162,7 +162,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textSub)),
             const SizedBox(height: YbsSpace.s5),
-            YbsButton(label: '취소', variant: YbsButtonVariant.ghost, onTap: () => context.go('/home')),
+            YbsButton(label: '취소', variant: YbsButtonVariant.ghost, onTap: () => context.go('/battle')),
           ],
         ],
       ),
@@ -342,7 +342,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
                   variant: YbsButtonVariant.ghost,
                   size: YbsButtonSize.sm,
                   fullWidth: true,
-                  onTap: () => context.go('/home'),
+                  onTap: () => context.go('/battle'),
                 ),
               ],
             ),

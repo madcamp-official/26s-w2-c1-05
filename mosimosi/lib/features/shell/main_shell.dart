@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/theme.dart';
 
-/// GNB 셸 (IA §4): 홈 / 도감 / 전적 3개 목적지.
+/// GNB 셸 (IA §4 + 디자인 3a): 홈 / 도감 / 배틀 / 전적 4개 목적지.
 /// 모바일 = 하단 탭바, 데스크톱 = 좌측 사이드 레일 (IA 미해결 #1 → 레일 선택).
-/// 통화·배틀·설정·스파이크는 셸 밖 풀스크린 라우트.
+/// 통화·배틀 매칭·설정·스파이크는 셸 밖 풀스크린 라우트.
 class MainShell extends StatelessWidget {
   const MainShell({super.key, required this.shell});
 
@@ -41,6 +41,10 @@ class MainShell extends StatelessWidget {
                     selectedIcon: Icon(Icons.menu_book, color: YbsColor.go400),
                     label: Text('도감')),
                 NavigationRailDestination(
+                    icon: Icon(Icons.bolt_outlined, color: YbsColor.textFaint),
+                    selectedIcon: Icon(Icons.bolt, color: YbsColor.go400),
+                    label: Text('배틀')),
+                NavigationRailDestination(
                     icon: Icon(Icons.insights_outlined, color: YbsColor.textFaint),
                     selectedIcon: Icon(Icons.insights, color: YbsColor.go400),
                     label: Text('전적')),
@@ -68,6 +72,10 @@ class MainShell extends StatelessWidget {
               icon: Icon(Icons.menu_book_outlined, color: YbsColor.textFaint),
               selectedIcon: Icon(Icons.menu_book, color: YbsColor.go400),
               label: '도감'),
+          NavigationDestination(
+              icon: Icon(Icons.bolt_outlined, color: YbsColor.textFaint),
+              selectedIcon: Icon(Icons.bolt, color: YbsColor.go400),
+              label: '배틀'),
           NavigationDestination(
               icon: Icon(Icons.insights_outlined, color: YbsColor.textFaint),
               selectedIcon: Icon(Icons.insights, color: YbsColor.go400),

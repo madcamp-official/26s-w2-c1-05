@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/battle/battle_brief_screen.dart';
+import '../features/battle/battle_lobby_screen.dart';
 import '../features/battle/battle_matching_screen.dart';
 import '../features/battle/battle_result_screen.dart';
 import '../features/battle/battle_watch_screen.dart';
@@ -81,6 +82,12 @@ GoRouter buildRouter({required String initialLocation}) => GoRouter(
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
+            path: '/battle',
+            builder: (context, state) => const BattleLobbyScreen(),
+          ),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(
             path: '/history',
             builder: (context, state) => const HistoryScreen(),
             routes: [
@@ -98,9 +105,9 @@ GoRouter buildRouter({required String initialLocation}) => GoRouter(
         ]),
       ],
     ),
-    // ---- 셸 밖 풀스크린: 배틀(홈 CTA 진입, IA §4) ----
+    // ---- 셸 밖 풀스크린: 배틀 매칭·진행 (로비 CTA 진입, 디자인 3a) ----
     GoRoute(
-      path: '/battle',
+      path: '/battle/matching',
       builder: (context, state) => const BattleMatchingScreen(),
     ),
     GoRoute(
