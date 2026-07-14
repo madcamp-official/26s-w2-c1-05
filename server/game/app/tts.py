@@ -86,7 +86,10 @@ async def _synthesize_qwen(req: TtsRequest) -> bytes | None:
         "seed": cfg["seed"],
         "instructions": cfg["instructions"],
         "language": "Korean",
-        "response_format": "mp3",
+        # mp3(24kHz, MPEG-2 Layer III/LSF)는 일부 안드로이드 하드웨어 디코더
+        # (예: 삼성 c2.sec.mp3.decoder)에서 디코딩이 멈추는 문제가 확인돼 wav로
+        # 통일. 클라이언트가 매직바이트로 포맷을 자동 감지해 재생하므로 안전.
+        "response_format": "wav",
     }
     try:
         async with httpx.AsyncClient(timeout=8) as client:
@@ -114,7 +117,7 @@ async def synthesize(req: TtsRequest):
 
     qwen_audio = await _synthesize_qwen(req)
     if qwen_audio is not None:
-        return Response(content=qwen_audio, media_type="audio/mpeg")
+        return Response(content=qwen_audio, media_type="audio/wav")
 
     key = os.getenv("GOOGLE_TTS_API_KEY", "")
     if not key:
