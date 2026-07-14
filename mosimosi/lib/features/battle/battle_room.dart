@@ -84,6 +84,11 @@ class BattleRoomController extends ChangeNotifier {
 
   String state = 'matched'; // 서버 state 메시지 그대로
   bool readySent = false;
+  // ---- 인크리멘탈 심판 (실시간 게임 층 — 참고 지표, 최종 승패는 종료 후 심판) ----
+  int myMomentum = 50; // 내 관점 기세 0~100
+  int judgeSeq = 0; // 판정 도착 감지용 (화면 팝업 트리거)
+  String? judgeEvent; // 최근 판정의 이벤트 문구 (null = 이벤트 없음)
+  String myHint = ''; // 내 전용 AI 코치 귓속말 (최신 유지)
   final List<BattleUtterance> utterances = [];
   Map<String, dynamic>? verdict; // 서버 verdict 메시지 (judging → done 사이 도착)
   DateTime? _callStartedAt; // in_call 진입 시각 — tStartMs 기준점(규칙 #3)
@@ -139,6 +144,13 @@ class BattleRoomController extends ChangeNotifier {
         );
         if (u.text.isEmpty) return;
         utterances.add(u);
+        notifyListeners();
+      case 'judge': // 인크리멘탈 심판 — 기세·이벤트·코치 (힌트는 서버가 내 몫만 전송)
+        myMomentum = (msg['momentum'] as num?)?.round() ?? myMomentum;
+        judgeSeq = (msg['seq'] as num?)?.toInt() ?? judgeSeq + 1;
+        judgeEvent = msg['event'] as String?;
+        final hint = msg['hint'] as String? ?? '';
+        if (hint.isNotEmpty) myHint = hint;
         notifyListeners();
       case 'verdict':
         verdict = msg;

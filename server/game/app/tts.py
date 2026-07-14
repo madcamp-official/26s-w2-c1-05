@@ -86,7 +86,6 @@ async def _synthesize_qwen(req: TtsRequest) -> bytes | None:
         "seed": cfg["seed"],
         "instructions": cfg["instructions"],
         "language": "Korean",
-        # 클라이언트가 받은 파일을 항상 .mp3로 저장하므로 콘텐츠도 mp3로 통일.
         "response_format": "mp3",
     }
     try:
