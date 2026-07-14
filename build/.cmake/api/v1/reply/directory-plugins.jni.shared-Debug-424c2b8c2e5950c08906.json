@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "plugins/jni/shared",
+		"source" : "flutter/ephemeral/.plugin_symlinks/jni/src"
+	}
+}

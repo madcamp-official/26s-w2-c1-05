@@ -1,0 +1,20 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCInformation.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCommonLanguageInclude.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeLanguageInformation.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/CMakeCommonCompilerMacros.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC-C.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCLinkerInformation.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCommonLinkerInformation.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC-C.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC-C.cmake
+C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/build/CMakeFiles/3.31.6-msvc6/CMakeCCompiler.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/src/CMakeLists.txt
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/src/Configure.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/src/soloud/contrib/cmake/OptionDependentOnPackage.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/src/soloud/contrib/cmake/PrintOptionStatus.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/src/src.cmake
+C:/Users/grace/madcamp/26s-w2-c1-05/mosimosi/windows/flutter/ephemeral/.plugin_symlinks/flutter_soloud/windows/CMakeLists.txt
