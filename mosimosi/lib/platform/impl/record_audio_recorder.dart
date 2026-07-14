@@ -28,6 +28,13 @@ class RecordAudioRecorder implements AudioRecorder {
         audioManagerMode: rec.AudioManagerMode.modeInCommunication,
         speakerphone: true,
       ),
+      // 기본값(pause)은 오디오 포커스를 뺏기면 캡처를 정지시키고, resume은
+      // pauseResume 모드에서만 자동으로 일어남 — 그런데 보스 TTS 재생이
+      // 시작되자마자 포커스를 가져가 record 플러그인이 영구 정지되는
+      // 버그(2026-07-14, 안드로이드에서 통화 내내 청크 0개)를 확인함.
+      // 에코 차단은 이미 call_session.dart의 setMuted() 게이트가 담당하므로
+      // 포커스 요청 자체를 꺼서 경합을 원천 차단.
+      audioInterruption: rec.AudioInterruptionMode.none,
     ));
     yield* stream;
   }
