@@ -29,6 +29,9 @@ final List<Boss> bossesSeed = [
     clearConditions: ['주문 메뉴 정확히 전달', '배달 주소 전달', '요청사항 전달'],
     timeLimit: Duration(minutes: 3),
     difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 5, surpriseFreq: 1, interrupts: false),
+    // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
+    // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
+    voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Charon', pace: 0.9),
   ),
   const Boss(
     id: 'dental',
@@ -57,6 +60,9 @@ final List<Boss> bossesSeed = [
     clearConditions: ['원하는 날짜·시간에 예약 확정', '돌발 질문 2개 이상 침착하게 응답'],
     timeLimit: Duration(minutes: 3),
     difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 3, surpriseFreq: 5, interrupts: false),
+    // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
+    // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
+    voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Kore', pace: 1.15),
   ),
   const Boss(
     id: 'refund',
@@ -86,6 +92,9 @@ final List<Boss> bossesSeed = [
     clearConditions: ['거절 근거(규정 조항) 확인', '대안 제시에 물러서지 않기', '환불 확답 또는 접수번호 받기'],
     timeLimit: Duration(minutes: 3),
     difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 1, surpriseFreq: 4, interrupts: true),
+    // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
+    // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
+    voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Aoede', pace: 1.0),
   ),
 ];
 

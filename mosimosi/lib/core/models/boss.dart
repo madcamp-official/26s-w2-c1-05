@@ -24,14 +24,38 @@ class DifficultyParams {
 }
 
 /// 모든 보스 공통 안전·형식 규칙 (FSD 3.1.3 / 6.3).
+/// TTS 표현 규칙: 쉼표는 서버(tts.py)가 Chirp3 HD pause 태그로 자동 변환해
+/// 실제 호흡처럼 들리게 하므로, 여기서 쉼표를 자연스럽게 쓰라고 지시하는 것이
+/// 곧 TTS 리듬 개선으로 직결된다.
 const String bossCommonRules = '''
 [공통 규칙]
 - 인신공격, 욕설, 비하 금지. 실존 업체·인물·전화번호 언급 금지.
 - 전화 통화 상황을 절대 벗어나지 마라. 지문·해설 없이 대사만 말해라.
-- 항상 한국어 구어체로만 답한다.''';
+- 항상 한국어 구어체로만 답한다.
+
+[TTS 표현 규칙 — 음성으로 자연스럽게 들리도록]
+- 쉼표로 숨쉴 지점을, 말줄임표(…)로 머뭇거림을, 느낌표로 강조를 나타내라.
+- "아이고", "하아…", "어어" 같은 감탄사·필러를 자연스럽게 섞어 써도 좋다.
+- 숫자·시간은 한글로 표기하라 (예: "3시 30분" → "세시 반", "7조 2항" → "칠조 이항").''';
 
 /// 도감 티어 (디자인: normal=슬레이트, rare=스카이, boss=레드, legend=골드).
 enum BossTier { normal, rare, boss, legend }
+
+/// 보스전 TTS 보이스 프리셋 (Google Cloud TTS `/tts/synthesize` 서버 프록시용).
+/// [voiceName]은 `ko-KR-Chirp3-HD-*` 등 Cloud TTS voice 리소스명 그대로.
+/// [pace]는 speakingRate(0.25~2.0, 1.0=기본 속도). [pitch]는 semitone(-20~20)이며
+/// Chirp3 HD는 pitch를 지원하지 않아 서버에서 무시된다 — Neural2 폴백 보이스 전용.
+class TtsVoicePreset {
+  const TtsVoicePreset({
+    required this.voiceName,
+    this.pace = 1.0,
+    this.pitch,
+  });
+
+  final String voiceName;
+  final double pace;
+  final double? pitch;
+}
 
 class Boss {
   const Boss({
@@ -48,6 +72,7 @@ class Boss {
     required this.clearConditions,
     required this.timeLimit,
     required this.difficulty,
+    required this.voicePreset,
   });
 
   final String id;
@@ -63,6 +88,7 @@ class Boss {
   final List<String> clearConditions;
   final Duration timeLimit;
   final DifficultyParams difficulty;
+  final TtsVoicePreset voicePreset;
 
   /// 판 시작 시 최종 시스템 프롬프트 조립 — 랜덤 변수(FSD 3.1.3) 주입.
   String buildSystemPrompt(List<String> variables) => [
