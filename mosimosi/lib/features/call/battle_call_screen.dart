@@ -44,6 +44,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   bool _silenceTimerStarted = false; // 침묵 타이머 1회성 시작 가드
   Timer? _silenceTimer;
   bool _showOpeningPopup = false;
+  int _seenJudgeSeq = 0; // 인크리멘탈 판정 팝업 트리거
+  String? _judgePopup;
+  Timer? _judgePopupTimer;
   final _fallbackController = TextEditingController();
 
   @override
@@ -101,6 +104,18 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     if (_showOpeningPopup && room.utterances.isNotEmpty) {
       _showOpeningPopup = false; // 누구든 말을 시작하면 즉시 닫기
     }
+    // 인크리멘탈 판정 도착 — 이벤트가 있으면 2.5초 팝업 (FSD §4.3).
+    if (room.judgeSeq != _seenJudgeSeq) {
+      _seenJudgeSeq = room.judgeSeq;
+      final event = room.judgeEvent;
+      if (event != null && event.isNotEmpty) {
+        _judgePopupTimer?.cancel();
+        _judgePopup = event;
+        _judgePopupTimer = Timer(const Duration(milliseconds: 2500), () {
+          if (mounted) setState(() => _judgePopup = null);
+        });
+      }
+    }
     if (room.ended && !_navigated) {
       _navigated = true; // judging 진입 즉시 결과 화면 (스피너 → verdict)
       if (mounted) context.go('/battle/${widget.roomId}/result');
@@ -113,6 +128,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   void dispose() {
     _clock?.cancel();
     _silenceTimer?.cancel();
+    _judgePopupTimer?.cancel();
     _sttSub?.cancel();
     _audioUplink?.cancel();
     _stt?.stop();
@@ -185,7 +201,9 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           _callerBlock(room),
           _secretChip(room),
           if (_showOpeningPopup) _openingSuggestion(room),
+          if (_judgePopup != null) _judgeEventBanner(),
           Expanded(child: _captionList(room)),
+          _coachHint(room),
           _micStatus(room),
           if (room.state == 'disconnected') _disconnectedBar() else _playerControls(room),
         ],
@@ -219,14 +237,15 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          _tugBar(),
+          _tugBar(room),
         ],
       ),
     );
   }
 
-  /// 실시간 기세 미지원(P1) — 중립 50:50 표시.
-  Widget _tugBar() {
+  /// 실시간 기세 줄다리기 — 인크리멘탈 심판(FSD §4.2)의 momentum을 애니메이션 반영.
+  /// 중간 판정은 참고 지표(최종 승패는 종료 후 정밀 심판)라 5~95%로만 움직인다.
+  Widget _tugBar(BattleRoomController room) {
     return SizedBox(
       height: 12,
       child: Stack(
@@ -238,13 +257,18 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: YbsColor.go500,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(YbsRadius.full)),
-                  boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 14)],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: (room.myMomentum / 100).clamp(0.05, 0.95)),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, factor, _) => FractionallySizedBox(
+                widthFactor: factor,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: YbsColor.go500,
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(YbsRadius.full)),
+                    boxShadow: [BoxShadow(color: YbsColor.goGlow, blurRadius: 14)],
+                  ),
                 ),
               ),
             ),
@@ -252,6 +276,57 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           Align(
             alignment: Alignment.center,
             child: Container(width: 3, height: 12, decoration: BoxDecoration(color: YbsColor.white, borderRadius: BorderRadius.circular(2))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 인크리멘탈 심판 이벤트 팝업 — "규칙 카드 발동!" 등, 2.5초 자동 소멸.
+  Widget _judgeEventBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3),
+        decoration: BoxDecoration(
+          color: YbsColor.gold400.withValues(alpha: 0.12),
+          border: Border.all(color: YbsColor.gold400.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(YbsRadius.md),
+          boxShadow: [BoxShadow(color: YbsColor.gold400.withValues(alpha: 0.18), blurRadius: 20)],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.flash_on, size: 20, color: YbsColor.gold400),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Expanded(
+              child: Text(_judgePopup!,
+                  style: const TextStyle(
+                      fontSize: YbsType.sub, fontWeight: FontWeight.w800, color: YbsColor.gold400)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// AI 코치 귓속말 — 본인 전용 한 줄 (서버가 내 몫만 보내줌, FSD §4.3).
+  Widget _coachHint(BattleRoomController room) {
+    if (room.myHint.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(YbsSpace.s5, 0, YbsSpace.s5, YbsSpace.s2 + 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.tips_and_updates_outlined, size: 14, color: YbsColor.amber400),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(room.myHint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: YbsType.micro, height: 1.4, color: YbsColor.textSub)),
           ),
         ],
       ),
