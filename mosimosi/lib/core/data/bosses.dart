@@ -94,7 +94,7 @@ final List<Boss> bossesSeed = [
     difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 1, surpriseFreq: 4, interrupts: true),
     // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
     // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
-    voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Orus', pace: 1.0),
+    voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Aoede', pace: 1.0),
   ),
 ];
 
