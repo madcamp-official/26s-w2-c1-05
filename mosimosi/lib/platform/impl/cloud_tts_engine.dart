@@ -71,7 +71,11 @@ class CloudTtsEngine implements TtsEngine {
 
   Future<void> _defaultPlayBytes(Uint8List bytes) async {
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/tts_${DateTime.now().microsecondsSinceEpoch}.mp3');
+    // 서버 백엔드에 따라 WAV(Qwen)·MP3(Google)가 오므로 매직 바이트로 판별.
+    final isWav = bytes.length > 4 &&
+        bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46; // 'RIFF'
+    final ext = isWav ? 'wav' : 'mp3';
+    final file = File('${dir.path}/tts_${DateTime.now().microsecondsSinceEpoch}.$ext');
     await file.writeAsBytes(bytes);
     try {
       await _player.setFilePath(file.path);

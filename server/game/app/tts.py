@@ -1,4 +1,12 @@
-"""Google Cloud Text-to-Speech 프록시 (규칙 #4: API 키는 서버에만).
+"""보스전 TTS 프록시 (규칙 #4: API 키·내부 주소는 서버에만).
+
+백엔드 우선순위 (2026-07-14): ① Qwen3-TTS(vLLM-Omni, QWEN_TTS_URL — RTF 0.27)
+→ ② Google Cloud TTS(GOOGLE_TTS_API_KEY) → ③ 503(클라가 OS 내장 TTS 폴백).
+클라이언트 계약(/tts/synthesize {text, voice_name, pace, pitch})은 그대로 —
+voice_name(Chirp3 보이스명)을 서버가 Qwen 화자+스타일 지시로 매핑한다.
+
+아래는 Google 경로 원 설명:
+Google Cloud Text-to-Speech 프록시.
 
 보스전 통화 전용 — 콜세션이 문장 단위로 만든 텍스트를 보스별 보이스 프리셋으로
 합성해 오디오 바이트를 반환한다. llm.py와 동일한 "키 은닉 프록시" 패턴이나,
@@ -48,6 +56,43 @@ class TtsRequest(BaseModel):
     ssml: bool = False
 
 
+# ---- Qwen3-TTS (vLLM-Omni) 우선 경로 ----
+_QWEN_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+# Chirp3 보이스명 → (Qwen 화자, 스타일 지시). 보스 캐릭터별 튜닝 지점.
+_QWEN_VOICE_MAP = {
+    "ko-KR-Chirp3-HD-Charon": ("uncle_fu", "무뚝뚝하고 걸걸한 중년 남성 가게 사장님 말투로"),
+    "ko-KR-Chirp3-HD-Kore": ("sohee", "빠르고 사무적으로 쏘아붙이는 접수원 말투로"),
+    "ko-KR-Chirp3-HD-Aoede": ("sohee", "차분하지만 단호하게 거절하는 상담원 말투로"),
+}
+_MALE_CHIRP = ("Charon", "Puck", "Fenrir", "Orus")
+
+
+async def _synthesize_qwen(req: TtsRequest) -> Response | None:
+    """Qwen 경로 시도 — 미설정·장애·SSML 요청이면 None (다음 백엔드로)."""
+    base = os.getenv("QWEN_TTS_URL", "")
+    if not base or req.ssml:  # Qwen은 SSML 미지원
+        return None
+    speaker, instruct = _QWEN_VOICE_MAP.get(req.voice_name) or (
+        ("ryan", None) if any(m in req.voice_name for m in _MALE_CHIRP)
+        else ("sohee", None))
+    body = {
+        "model": _QWEN_MODEL,
+        "input": req.text,
+        "voice": speaker,
+        "language": "Korean",
+        "response_format": "wav",
+    }
+    if instruct:
+        body["instructions"] = instruct
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(f"{base}/v1/audio/speech", json=body)
+            r.raise_for_status()
+            return Response(content=r.content, media_type="audio/wav")
+    except Exception:
+        return None  # Qwen 서버 장애 — Google 폴백으로
+
+
 def _build_input(req: TtsRequest) -> dict:
     if req.ssml:
         return {"ssml": req.text}
@@ -58,11 +103,14 @@ def _build_input(req: TtsRequest) -> dict:
 
 @router.post("/tts/synthesize")
 async def synthesize(req: TtsRequest):
-    key = os.getenv("GOOGLE_TTS_API_KEY", "")
-    if not key:
-        raise HTTPException(503, "GOOGLE_TTS_API_KEY not configured")
     if not req.text.strip():
         raise HTTPException(400, "text is empty")
+    qwen = await _synthesize_qwen(req)  # ① Qwen 우선
+    if qwen is not None:
+        return qwen
+    key = os.getenv("GOOGLE_TTS_API_KEY", "")
+    if not key:  # ② Google 미설정 → ③ 클라가 OS TTS 폴백
+        raise HTTPException(503, "no TTS backend available")
 
     audio_config: dict = {"audioEncoding": "MP3"}
     if req.pace is not None:
