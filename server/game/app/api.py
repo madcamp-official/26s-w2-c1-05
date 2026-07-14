@@ -107,3 +107,30 @@ async def list_sessions(limit: int = 20, user_id: uuid.UUID = Depends(current_us
         "SELECT id, mode, boss_id, room_id, started_at, ended_at, result, score"
         " FROM sessions WHERE user_id=$1 ORDER BY started_at DESC LIMIT $2", user_id, limit)
     return [dict(r) | {"id": str(r["id"])} for r in rows]
+
+
+@router.get("/users/me/sessions/{session_id}")
+async def get_session_detail(session_id: uuid.UUID, user_id: uuid.UUID = Depends(current_user)):
+    """전적 상세 — WHERE절에 user_id를 같이 걸어 남의 세션이면 존재 여부조차
+    구분 안 되는 404로 통일(소유자 아님과 없음을 구분하는 403 응답은 방어벽 우회
+    단서가 될 수 있어 지양). judge는 jsonb라 asyncpg가 원문 텍스트로 반환 —
+    json.loads 안 하면 클라에 문자열로 이중 인코딩되어 내려간다."""
+    pool = require_pool()
+    row = await pool.fetchrow(
+        "SELECT id, mode, boss_id, room_id, started_at, ended_at, end_reason, result, score, judge"
+        " FROM sessions WHERE id=$1 AND user_id=$2", session_id, user_id)
+    if row is None:
+        raise HTTPException(404)
+    # 배틀 발화는 session_id가 아니라 room_id로 저장됨(규칙 #2 격리 설계) — 지금은
+    # 배틀 판이 sessions에 기록되지 않아 실질적으로 mode='boss'만 해당하지만,
+    # 향후를 대비해 room_id 쪽도 대비해 조회한다.
+    utterances = await pool.fetch(
+        "SELECT speaker, COALESCE(refined_text, text) AS text, t_start_ms FROM utterances"
+        " WHERE session_id=$1 OR room_id=$2 ORDER BY t_start_ms",
+        session_id, row["room_id"])
+    return dict(row) | {
+        "id": str(row["id"]),
+        "room_id": str(row["room_id"]) if row["room_id"] else None,
+        "judge": json.loads(row["judge"]) if row["judge"] else None,
+        "transcript": [dict(u) for u in utterances],
+    }
