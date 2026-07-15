@@ -16,7 +16,9 @@ class FlutterTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<void> speak(String text, {double pitch = 1.0, double rate = 0.5}) async {
+  Future<void> speak(String text,
+      {double pitch = 1.0, double rate = 0.5, String? emotion}) async {
+    // OS 내장 TTS는 감정 지시를 지원하지 않아 [emotion]은 무시한다 (폴백 경로).
     await _ensureReady();
     await _tts.setPitch(pitch);
     await _tts.setSpeechRate(rate);

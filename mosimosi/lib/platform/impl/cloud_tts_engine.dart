@@ -40,10 +40,11 @@ class CloudTtsEngine implements TtsEngine {
   static const _timeout = Duration(seconds: 15);
 
   @override
-  Future<void> speak(String text, {double pitch = 1.0, double rate = 0.5}) async {
+  Future<void> speak(String text,
+      {double pitch = 1.0, double rate = 0.5, String? emotion}) async {
     if (text.trim().isEmpty) return;
     try {
-      final bytes = await _synthesize(text);
+      final bytes = await _synthesize(text, emotion);
       await _playBytes(bytes);
     } catch (_) {
       // 서버 미가용·네트워크 오류 등 — 통화 지속을 위해 OS 내장 TTS로 폴백.
@@ -51,7 +52,7 @@ class CloudTtsEngine implements TtsEngine {
     }
   }
 
-  Future<Uint8List> _synthesize(String text) async {
+  Future<Uint8List> _synthesize(String text, String? emotion) async {
     final request = http.Request('POST', Uri.parse('$baseUrl/tts/synthesize'))
       ..headers['Content-Type'] = 'application/json'
       // 한글 포함 → UTF-8 바이트로 명시 인코딩 (인코딩 모호성 제거).
@@ -60,6 +61,7 @@ class CloudTtsEngine implements TtsEngine {
         'voice_name': voicePreset.voiceName,
         'pace': voicePreset.pace,
         if (voicePreset.pitch != null) 'pitch': voicePreset.pitch,
+        if (emotion != null) 'emotion': emotion,
       }));
     final response = await http.Response.fromStream(
         await _httpClient.send(request).timeout(_timeout));
