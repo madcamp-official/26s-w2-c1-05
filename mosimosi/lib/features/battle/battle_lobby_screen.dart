@@ -58,11 +58,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
     return '시즌 1 · $_wins승 $_losses패${rate == null ? '' : ' · 승률 $rate%'}';
   }
 
-  String _rateText(String key) {
-    final v = _data?[key] as num?;
-    return v == null ? '—' : '${(v * 100).round()}%';
-  }
-
   @override
   Widget build(BuildContext context) {
     if (isDesktop(context)) return _desktop(context);
@@ -145,7 +140,7 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
                   height: 1.15,
                   color: YbsColor.textHero)),
           const SizedBox(height: 18),
-          const Text('실시간 1v1 · 민원인 vs 상담원 — 기세 싸움.\n역할은 매칭 후 무작위 배정돼요.',
+          const Text('실시간 1v1 협상 배틀 — 서로의 비밀을 걸고 겨뤄요.\n시나리오와 역할은 매칭마다 무작위예요.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 15, height: 1.55, color: YbsColor.textSub)),
@@ -244,9 +239,9 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
               _statTile('$_streak', '연승 중',
                   valueColor: _streak > 0 ? YbsColor.go400 : YbsColor.textHero),
               const SizedBox(width: 10),
-              _statTile(_rateText('agentWinRate'), '상담원 승률'),
+              _statTile('$_wins', '승', valueColor: YbsColor.go400),
               const SizedBox(width: 10),
-              _statTile(_rateText('claimantWinRate'), '민원인 승률'),
+              _statTile('$_losses', '패', valueColor: YbsColor.live400),
             ],
           ),
         ],
@@ -334,7 +329,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
       _ => ('DRAW', YbsColor.textSub, YbsColor.borderStrong),
     };
     final my = (r['myMomentum'] as num?)?.round() ?? 50;
-    final roleLabel = r['myRole'] == 'agent' ? '상담원' : '민원인';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -359,7 +353,7 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text('vs ${r['opponent'] ?? '상대'} · $roleLabel',
+            child: Text('vs ${r['opponent'] ?? '상대'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style:

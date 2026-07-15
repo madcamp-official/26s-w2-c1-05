@@ -248,7 +248,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
                     child: Text('VS',
                         style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live500)),
                   ),
-                  player(name: match.opponentNickname, role: match.opponentRoleLabel, isMe: false),
+                  player(name: match.opponentNickname, role: match.opponentLabel, isMe: false),
                 ],
               ),
             ),

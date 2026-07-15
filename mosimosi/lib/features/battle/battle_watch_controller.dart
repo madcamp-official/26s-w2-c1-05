@@ -25,11 +25,12 @@ class BattleWatchController extends ChangeNotifier {
   String state = 'in_call';
   int momentumAgent = 50; // agent 관점 0~100
   DateTime? _startedAt; // 통화 시작 추정 (경과 시간 표시용)
-  String agentNick = '상담원';
-  String claimantNick = '민원인';
-  String agentSecret = ''; // 감독 시점 — 양측 비밀 목표 노출
+  String agentNick = '역할 A';
+  String claimantNick = '역할 B';
+  String agentLabel = '역할 A'; // 시나리오 역할명 (판매자 등)
+  String claimantLabel = '역할 B';
+  String agentSecret = ''; // 감독 시점 — 양측 비밀 노출
   String claimantSecret = '';
-  String? agentRuleCard; // 상담원 전용 규칙 카드
   final List<WatchUtterance> agentLine = []; // agent 발화
   final List<WatchUtterance> claimantLine = []; // claimant 발화
 
@@ -64,11 +65,12 @@ class BattleWatchController extends ChangeNotifier {
         final players = msg['players'] as Map<String, dynamic>? ?? {};
         final agent = players['agent'] as Map?;
         final claimant = players['claimant'] as Map?;
-        agentNick = agent?['nickname'] as String? ?? '상담원';
-        claimantNick = claimant?['nickname'] as String? ?? '민원인';
-        agentSecret = agent?['secretGoal'] as String? ?? '';
-        claimantSecret = claimant?['secretGoal'] as String? ?? '';
-        agentRuleCard = agent?['ruleCard'] as String?;
+        agentNick = agent?['nickname'] as String? ?? '역할 A';
+        claimantNick = claimant?['nickname'] as String? ?? '역할 B';
+        agentLabel = agent?['roleLabel'] as String? ?? '역할 A';
+        claimantLabel = claimant?['roleLabel'] as String? ?? '역할 B';
+        agentSecret = agent?['secret'] as String? ?? agent?['secretGoal'] as String? ?? '';
+        claimantSecret = claimant?['secret'] as String? ?? claimant?['secretGoal'] as String? ?? '';
         final mom = msg['momentum'] as Map<String, dynamic>?;
         if (mom != null) momentumAgent = (mom['agent'] as num?)?.round() ?? 50;
         agentLine.clear();

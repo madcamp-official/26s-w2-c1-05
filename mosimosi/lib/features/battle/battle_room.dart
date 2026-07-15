@@ -7,43 +7,76 @@ import '../../platform/pcm_player.dart';
 import '../../services/game_server_client.dart';
 
 /// 매칭 성사 페이로드 — 서버 /ws/match `matched` 이벤트의 자기 몫(규칙 #2).
+/// 시나리오 5필드 브리핑(당신의 상황·목표·승패·물러설 수 없는 선+예외·비밀)을
+/// 서버가 역할별로 내려준다. 라벨(판매자/구매자 등)도 데이터로 온다.
 class BattleMatch {
   const BattleMatch({
     required this.roomId,
     required this.role,
-    required this.secretGoal,
-    required this.ruleCard,
+    required this.scenarioTitle,
     required this.situation,
+    required this.roleLabel,
+    required this.opponentLabel,
+    required this.personal,
+    required this.goal,
+    required this.winNote,
+    required this.hardLine,
+    required this.exceptions,
+    required this.secret,
+    required this.chipGoal,
+    required this.chipLine,
+    required this.chipSecret,
     required this.openingLine,
     required this.opponentNickname,
     required this.opponentFormFactor,
   });
 
   final String roomId;
-  final String role; // 'agent' | 'claimant'
-  final String secretGoal;
-  final String? ruleCard; // 상담원 전용 — 민원인은 null
-  final String situation;
+  final String role; // 'agent'(역할 A) | 'claimant'(역할 B) — 슬롯 식별용
+  final String scenarioTitle;
+  final String situation; // 공통 상황
+  final String roleLabel; // 내 역할명 (판매자 등)
+  final String opponentLabel; // 상대 역할명 (구매자 등)
+  final String personal; // 당신의 상황
+  final String goal; // 목표
+  final String winNote; // 승패 기준
+  final String hardLine; // 물러설 수 없는 선
+  final List<String> exceptions; // 선을 움직이는 조건부 예외
+  final String secret; // 들키면 안 되는 비밀
+  final String chipGoal; // 통화 칩 — 목표
+  final String chipLine; // 통화 칩 — 선
+  final String chipSecret; // 통화 칩 — 비밀
   final String openingLine; // 침묵 지속 시 제안할 내 몫의 첫마디
   final String opponentNickname;
   final String opponentFormFactor; // 'android' | 'windows'
 
   bool get isAgent => role == 'agent';
-  String get roleLabel => isAgent ? '상담원' : '민원인';
-  String get opponentRoleLabel => isAgent ? '민원인' : '상담원';
 
-  factory BattleMatch.fromJson(Map<String, dynamic> j) => BattleMatch(
-        roomId: j['roomId'] as String,
-        role: j['role'] as String,
-        secretGoal: j['secretGoal'] as String? ?? '',
-        ruleCard: j['ruleCard'] as String?,
-        situation: j['situation'] as String? ?? '',
-        openingLine: j['openingLine'] as String? ?? '',
-        opponentNickname:
-            (j['opponent'] as Map<String, dynamic>?)?['nickname'] as String? ?? '상대',
-        opponentFormFactor:
-            (j['opponent'] as Map<String, dynamic>?)?['formFactor'] as String? ?? 'android',
-      );
+  factory BattleMatch.fromJson(Map<String, dynamic> j) {
+    final chip = j['chip'] as Map<String, dynamic>? ?? const {};
+    return BattleMatch(
+      roomId: j['roomId'] as String,
+      role: j['role'] as String,
+      scenarioTitle: j['scenarioTitle'] as String? ?? '배틀',
+      situation: j['situation'] as String? ?? '',
+      roleLabel: j['roleLabel'] as String? ?? '나',
+      opponentLabel: j['opponentLabel'] as String? ?? '상대',
+      personal: j['personal'] as String? ?? '',
+      goal: j['goal'] as String? ?? '',
+      winNote: j['winNote'] as String? ?? '',
+      hardLine: j['hardLine'] as String? ?? '',
+      exceptions: (j['exceptions'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      secret: j['secret'] as String? ?? '',
+      chipGoal: chip['goal'] as String? ?? '',
+      chipLine: chip['line'] as String? ?? '',
+      chipSecret: chip['secret'] as String? ?? '',
+      openingLine: j['openingLine'] as String? ?? '',
+      opponentNickname:
+          (j['opponent'] as Map<String, dynamic>?)?['nickname'] as String? ?? '상대',
+      opponentFormFactor:
+          (j['opponent'] as Map<String, dynamic>?)?['formFactor'] as String? ?? 'android',
+    );
+  }
 }
 
 /// 배틀 발화 한 건 (서버 브로드캐스트가 단일 진실 — 양측 순서 일치 보장).

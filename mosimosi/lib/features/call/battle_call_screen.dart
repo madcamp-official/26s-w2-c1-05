@@ -189,9 +189,13 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
           ? Scaffold(
               body: buildCallDesktopStage(
                 phone: phone,
-                rightLabel: room.match.opponentNickname,
-                momentum: 0.5, // 실시간 기세는 인크리멘탈 심판(P1) 몫 — 중립 고정
-                mission: room.match.secretGoal,
+                match: room.match,
+                momentum: (room.myMomentum / 100).clamp(0.05, 0.95),
+                coachHint: room.myHint,
+                captions: [
+                  for (final u in room.utterances)
+                    (mine: u.fromUserId == room.myUserId, text: u.text),
+                ],
                 showOpponentCaptions: _showOpponentCaptions,
               ),
             )
@@ -237,7 +241,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
                   style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(11), color: YbsColor.textFaint)),
               const SizedBox(width: YbsSpace.s2),
               Expanded(
-                child: Text('${match.opponentNickname} · ${match.opponentRoleLabel}',
+                child: Text('${match.opponentNickname} · ${match.opponentLabel}',
                     maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right,
                     style: const TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.live400)),
               ),
@@ -366,33 +370,33 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     );
   }
 
-  /// 비밀 목표 접이식 칩 — 내 몫만 (규칙 #2). 펼치면 목표(+규칙 카드) 표시.
+  /// 4b 인콜 비밀 칩 — 내 몫만 (규칙 #2). 접힘: 목표·선·비밀 1줄 요약.
+  /// 펼침: 목표(승패)·선(예외)·비밀 5필드 카드. 자막·기세와 공간을 다투므로 압축 우선.
   Widget _secretChip(BattleRoomController room) {
     final match = room.match;
     if (!_secretOpen) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, 0),
-        child: Center(
-          child: GestureDetector(
-            onTap: () => setState(() => _secretOpen = true),
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4 - 2),
-              decoration: BoxDecoration(
-                color: YbsColor.go500.withValues(alpha: 0.08),
-                border: Border.all(color: YbsColor.go600),
-                borderRadius: BorderRadius.circular(YbsRadius.full),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.lock_outline, size: 14, color: YbsColor.go300),
-                  SizedBox(width: 7),
-                  Text('비밀 목표', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go300)),
-                  SizedBox(width: 7),
-                  Icon(Icons.keyboard_arrow_down, size: 14, color: YbsColor.go300),
-                ],
-              ),
+        child: GestureDetector(
+          onTap: () => setState(() => _secretOpen = true),
+          child: Container(
+            decoration: BoxDecoration(
+              color: YbsColor.surfaceCard,
+              border: Border.all(color: YbsColor.borderSoft),
+              borderRadius: BorderRadius.circular(YbsRadius.md),
+            ),
+            child: Row(
+              children: [
+                _chipSeg(Icons.gps_fixed, YbsColor.go400, match.chipGoal),
+                _chipDivider(),
+                _chipSeg(Icons.do_not_disturb_on_outlined, YbsColor.live400, match.chipLine),
+                _chipDivider(),
+                _chipSeg(Icons.lock_outline, YbsColor.gold300, match.chipSecret, valueColor: YbsColor.gold300),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: YbsSpace.s2 + 2),
+                  child: Icon(Icons.keyboard_arrow_up, size: 16, color: YbsColor.textFaint),
+                ),
+              ],
             ),
           ),
         ),
@@ -405,8 +409,8 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: YbsSpace.s3),
           decoration: BoxDecoration(
-            color: YbsColor.go500.withValues(alpha: 0.06),
-            border: Border.all(color: YbsColor.go600),
+            color: YbsColor.surfaceCard,
+            border: Border.all(color: YbsColor.borderStrong),
             borderRadius: BorderRadius.circular(YbsRadius.md),
           ),
           child: Column(
@@ -414,26 +418,127 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text('비밀 목표 — 나만 보여요',
-                      style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: YbsColor.go300)),
-                  Icon(Icons.keyboard_arrow_up, size: 14, color: YbsColor.go300),
+                children: [
+                  Row(children: [
+                    Text('내 비밀 카드',
+                        style: const TextStyle(fontFamily: YbsType.display, fontSize: 16, color: YbsColor.textHero)),
+                    const SizedBox(width: YbsSpace.s2),
+                    _rolePillSm(match.roleLabel),
+                  ]),
+                  const Icon(Icons.keyboard_arrow_down, size: 16, color: YbsColor.textFaint),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(match.secretGoal,
-                  style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.5, color: YbsColor.textHero)),
-              if (match.ruleCard != null) ...[
-                const SizedBox(height: YbsSpace.s2),
-                Text('규칙 · ${match.ruleCard!}',
-                    style: const TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
-              ],
+              const SizedBox(height: YbsSpace.s3),
+              _briefRow('목표', YbsColor.go400, YbsColor.go500.withValues(alpha: 0.10), match.goal),
+              if (match.winNote.isNotEmpty)
+                _briefRow('승패', YbsColor.sky400, YbsColor.sky400.withValues(alpha: 0.10), match.winNote),
+              _briefRow('상황', YbsColor.textSub, YbsColor.surfaceInset, match.situation, faint: true),
+              const SizedBox(height: YbsSpace.s2),
+              Container(
+                padding: const EdgeInsets.all(YbsSpace.s3),
+                decoration: BoxDecoration(
+                  color: YbsColor.live500.withValues(alpha: 0.05),
+                  border: Border.all(color: YbsColor.live600),
+                  borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _briefRow('선', YbsColor.live400, YbsColor.live500.withValues(alpha: 0.12), match.hardLine, bold: true),
+                    for (final e in match.exceptions)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 2, top: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.subdirectory_arrow_right, size: 13, color: YbsColor.amber400),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(e, style: const TextStyle(fontSize: 12.5, height: 1.4, color: YbsColor.textSub))),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: YbsSpace.s2),
+              Container(
+                padding: const EdgeInsets.all(YbsSpace.s3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16130A),
+                  border: Border.all(color: YbsColor.gold500),
+                  borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
+                ),
+                child: _briefRow('비밀', YbsColor.gold300, YbsColor.gold400.withValues(alpha: 0.12), match.secret, secret: true),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _chipSeg(IconData icon, Color color, String text, {Color? valueColor}) => Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          child: Row(
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor ?? YbsColor.textBody)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _chipDivider() => Container(width: 1, height: 22, color: YbsColor.borderSoft);
+
+  Widget _rolePillSm(String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: YbsColor.go500.withValues(alpha: 0.10),
+          border: Border.all(color: YbsColor.go600),
+          borderRadius: BorderRadius.circular(YbsRadius.full),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: YbsColor.go300)),
+      );
+
+  Widget _briefRow(String tag, Color tagColor, Color tagBg, String text,
+          {bool bold = false, bool faint = false, bool secret = false}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(YbsRadius.xs)),
+              child: Text(tag,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: tagColor)),
+            ),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Expanded(
+              child: Text(text,
+                  style: TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+                      color: secret
+                          ? const Color(0xFFF5E6C0)
+                          : faint
+                              ? YbsColor.textSub
+                              : bold
+                                  ? YbsColor.textHero
+                                  : YbsColor.textBody)),
+            ),
+          ],
+        ),
+      );
 
   /// 6초 침묵 후에도 발화가 없으면 노출 — 누군가 말을 시작하면 즉시 닫힘.
   Widget _openingSuggestion(BattleRoomController room) {

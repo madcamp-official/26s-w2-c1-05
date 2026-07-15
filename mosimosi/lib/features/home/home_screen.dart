@@ -273,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: YbsSpace.s2),
-            const Text('실시간 사람 대결 · 민원인 vs 상담원',
+            const Text('실시간 사람 대결 · 비밀을 건 협상 배틀',
                 style: TextStyle(fontSize: 13, height: 1.5, color: YbsColor.textSub)),
             const SizedBox(height: YbsSpace.s2 + 6),
             Row(
@@ -477,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(boss ? '보스전' : '전화 배틀',
                 style: const TextStyle(fontFamily: YbsType.display, fontSize: 38, height: 1.15, color: YbsColor.textHero)),
             const SizedBox(height: YbsSpace.s3),
-            Text(boss ? 'AI 보스에게 전화 걸기.\n전설의 진상 도감을 채우세요.' : '실시간 사람 대결.\n민원인 vs 상담원 — 기세 싸움.',
+            Text(boss ? 'AI 보스에게 전화 걸기.\n전설의 진상 도감을 채우세요.' : '실시간 사람 대결.\n서로의 비밀을 건 협상 배틀.',
                 style: const TextStyle(fontSize: 15, height: 1.55, color: YbsColor.textSub)),
             const SizedBox(height: YbsSpace.s2 + 2),
             Row(

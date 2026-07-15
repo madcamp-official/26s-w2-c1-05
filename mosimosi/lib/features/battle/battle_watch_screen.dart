@@ -175,7 +175,7 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, height: 1.2, color: accent)),
-        Text(agent ? '상담원' : '민원인', style: const TextStyle(fontSize: 11, color: YbsColor.textSub)),
+        Text(agent ? _watch.agentLabel : _watch.claimantLabel, style: const TextStyle(fontSize: 11, color: YbsColor.textSub)),
       ],
     );
     return Row(
@@ -186,10 +186,9 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
     );
   }
 
-  /// 감독 시점 — 해당 플레이어의 비밀 목표(+상담원 규칙 카드)를 관전자에게 노출.
+  /// 감독 시점 — 해당 플레이어의 들키면 안 되는 비밀을 관전자에게 노출.
   Widget _secretBox({required bool isAgent}) {
     final secret = isAgent ? _watch.agentSecret : _watch.claimantSecret;
-    final ruleCard = isAgent ? _watch.agentRuleCard : null;
     if (secret.isEmpty) return const SizedBox.shrink();
     final accent = isAgent ? YbsColor.go400 : YbsColor.live400;
     final border = isAgent ? YbsColor.go600 : YbsColor.live600;
@@ -208,17 +207,12 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
           Row(children: [
             Icon(Icons.lock_open_outlined, size: 13, color: accent),
             const SizedBox(width: 6),
-            Text('비밀 목표',
+            Text('들키면 안 되는 비밀',
                 style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: accent)),
           ]),
           const SizedBox(height: 4),
           Text(secret,
               style: const TextStyle(fontSize: YbsType.micro, height: 1.45, color: YbsColor.textBody)),
-          if (ruleCard != null && ruleCard.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text('규칙 · $ruleCard',
-                style: const TextStyle(fontSize: 10, height: 1.4, color: YbsColor.textSub)),
-          ],
         ],
       ),
     );
@@ -261,7 +255,7 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
                       TextSpan(
                           text: nick,
                           style: const TextStyle(fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                      TextSpan(text: ' · ${isAgent ? '상담원' : '민원인'} 화면'),
+                      TextSpan(text: ' · ${isAgent ? _watch.agentLabel : _watch.claimantLabel} 화면'),
                     ]),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub),

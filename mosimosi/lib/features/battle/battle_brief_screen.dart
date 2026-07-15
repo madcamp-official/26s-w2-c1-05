@@ -5,9 +5,9 @@ import '../../ui/theme.dart';
 import '../../ui/components.dart';
 import 'battle_room.dart';
 
-/// 3.2 배틀 브리핑 (비공개) — 디자인 H 섹션 이식.
-/// 공통 상황 + 비밀 구분선 + 비밀 목표(SECRET) + 규칙 카드(RULE·상담원만).
-/// 실배선: 서버가 준 자기 몫만 표시(규칙 #2), 준비완료→ready, 양측 완료→통화.
+/// 4a 배틀 브리핑 — 5필드 비밀 구조 (당근 네고 · 보증금 · 친구 배틀 공용).
+/// 공통 상황 + 당신의 상황 + 목표(승패) + 물러설 수 없는 선(+예외) + 비밀.
+/// 서버가 준 자기 몫만 표시(규칙 #2). 준비완료→ready, 양측 완료→통화.
 class BattleBriefScreen extends StatefulWidget {
   const BattleBriefScreen({super.key, required this.roomId});
 
@@ -48,7 +48,6 @@ class _BattleBriefScreenState extends State<BattleBriefScreen> {
   Widget build(BuildContext context) {
     final room = _room;
     if (room == null) {
-      // 딥링크/재시작 등으로 방 컨텍스트 소실 — 재매칭 안내.
       return Scaffold(
         body: Center(
           child: Column(
@@ -67,128 +66,66 @@ class _BattleBriefScreenState extends State<BattleBriefScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s5),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: YbsSpace.s5),
-                  Row(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s4, YbsSpace.s5, YbsSpace.s3),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('배틀 브리핑',
-                          style: TextStyle(fontFamily: YbsType.display, fontSize: 22, height: 1.2, color: YbsColor.white)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: YbsColor.amber400.withValues(alpha: 0.5)),
-                          borderRadius: BorderRadius.circular(YbsRadius.full),
-                        ),
-                        child: Text('양쪽 준비되면 시작',
-                            style: TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.amber400)),
+                          style: TextStyle(fontFamily: YbsType.display, fontSize: 24, height: 1.2, color: YbsColor.white)),
+                      Flexible(
+                        child: Text(match.scenarioTitle,
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.ink300)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: YbsSpace.s4),
-                  // 공통 상황
-                  Container(
-                    padding: const EdgeInsets.all(YbsSpace.s4),
-                    decoration: BoxDecoration(
-                      color: YbsColor.surfaceCard,
-                      border: Border.all(color: YbsColor.borderSoft),
-                      borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('공통 상황 · 양쪽 모두 확인',
-                            style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro) / 2, color: YbsColor.textFaint)),
-                        const SizedBox(height: YbsSpace.s2 + 2),
-                        Text(match.situation,
-                            style: const TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
-                        const SizedBox(height: YbsSpace.s2 + 2),
-                        Row(children: [
-                          _rolePill('나 · ${match.roleLabel}', YbsColor.go300, YbsColor.go600, YbsColor.go500.withValues(alpha: 0.10)),
-                          const SizedBox(width: YbsSpace.s2 + 2),
-                          Flexible(
-                            child: _rolePill('${match.opponentNickname} · ${match.opponentRoleLabel}',
-                                YbsColor.live400, YbsColor.live600, YbsColor.live500.withValues(alpha: 0.10)),
-                          ),
-                        ]),
-                      ],
-                    ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(YbsSpace.s5, 0, YbsSpace.s5, YbsSpace.s4),
+                    children: [
+                      _situationCard(match),
+                      const SizedBox(height: YbsSpace.s3),
+                      _personalCard(match),
+                      const SizedBox(height: YbsSpace.s3),
+                      _goalCard(match),
+                      const SizedBox(height: YbsSpace.s3),
+                      _hardLineCard(match),
+                      const SizedBox(height: YbsSpace.s3),
+                      _secretCard(match),
+                    ],
                   ),
-                  const SizedBox(height: 22),
-                  // 비밀 구분선
-                  Row(children: [
-                    const Expanded(child: Divider(color: YbsColor.borderStrong, height: 1)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s2 + 2),
-                      child: Row(children: [
-                        const Icon(Icons.lock_outline, size: 14, color: YbsColor.gold300),
-                        const SizedBox(width: 6),
-                        Text('여기부터는 비밀 — 상대에게 보이지 않아요',
-                            style: TextStyle(
-                                fontSize: YbsType.micro,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: YbsType.labelTracking(YbsType.micro),
-                                color: YbsColor.gold300)),
-                      ]),
-                    ),
-                    const Expanded(child: Divider(color: YbsColor.borderStrong, height: 1)),
-                  ]),
-                  const SizedBox(height: YbsSpace.s4 - 2),
-                  _secretCard(
-                    header: '비밀 목표',
-                    tag: 'SECRET',
-                    accent: YbsColor.go400,
-                    border: YbsColor.go600,
-                    bg: YbsColor.go500.withValues(alpha: 0.06),
-                    glow: YbsColor.go500.withValues(alpha: 0.10),
-                    body: Text(match.secretGoal,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-                    note: '달성 시 판정에 크게 반영돼요',
-                  ),
-                  if (match.ruleCard != null) ...[
-                    const SizedBox(height: YbsSpace.s4 - 2),
-                    _secretCard(
-                      header: '규칙 카드 · ${match.roleLabel} 전용',
-                      tag: 'RULE',
-                      accent: YbsColor.live400,
-                      border: YbsColor.borderIncall,
-                      bg: YbsColor.live500.withValues(alpha: 0.05),
-                      glow: null,
-                      body: Text(match.ruleCard!,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-                      note: '규칙 위반은 판정에서 불리하게 반영돼요',
-                    ),
-                  ],
-                  const Spacer(),
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: YbsButton(
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(YbsSpace.s5, YbsSpace.s3, YbsSpace.s5, YbsSpace.s4),
+                  child: Column(
+                    children: [
+                      YbsButton(
                         label: room.readySent ? '상대를 기다리는 중…' : '준비 완료',
                         size: YbsButtonSize.lg,
                         fullWidth: true,
                         onTap: room.readySent ? null : room.sendReady,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: YbsSpace.s2 + 2),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: YbsColor.amber400, shape: BoxShape.circle)),
-                      const SizedBox(width: YbsSpace.s2),
-                      Text(room.readySent ? '상대가 준비하면 바로 시작돼요' : '준비 완료를 누르면 상대에게 알려요',
-                          style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+                      const SizedBox(height: YbsSpace.s2 + 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(width: 6, height: 6, decoration: const BoxDecoration(color: YbsColor.amber400, shape: BoxShape.circle)),
+                          const SizedBox(width: YbsSpace.s2),
+                          Text(room.readySent ? '상대가 준비하면 바로 시작돼요' : '준비 완료를 누르면 상대에게 알려요',
+                              style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 30),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -196,51 +133,193 @@ class _BattleBriefScreenState extends State<BattleBriefScreen> {
     );
   }
 
-  Widget _rolePill(String label, Color fg, Color border, Color bg) => Container(
+  // ---- 카드 조각 ----
+  Widget _label(String text, {Color color = YbsColor.textFaint}) => Text(text,
+      style: TextStyle(
+          fontSize: YbsType.micro,
+          fontWeight: FontWeight.w700,
+          letterSpacing: YbsType.labelTracking(YbsType.micro) / 2,
+          color: color));
+
+  Widget _pill(String text, Color fg, Color border, Color bg) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(color: bg, border: Border.all(color: border), borderRadius: BorderRadius.circular(YbsRadius.full)),
-        child: Text(label,
+        child: Text(text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, color: fg)),
       );
 
-  Widget _secretCard({
-    required String header,
-    required String tag,
-    required Color accent,
-    required Color border,
-    required Color bg,
-    required Color? glow,
-    required Widget body,
-    required String note,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(YbsSpace.s4),
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border.all(color: border),
-        borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
-        boxShadow: glow == null ? null : [BoxShadow(color: glow, blurRadius: 20)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(header,
-                  style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro) / 2, color: accent)),
-              Text(tag,
-                  style: TextStyle(fontFamily: YbsType.numeric, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(10), color: accent)),
+  Widget _situationCard(BattleMatch m) => Container(
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: YbsColor.surfaceCard,
+          border: Border.all(color: YbsColor.borderSoft),
+          borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label('공통 상황 · 양쪽 모두 확인'),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(m.situation, style: const TextStyle(fontSize: YbsType.sub, height: 1.5, color: YbsColor.textBody)),
+            const SizedBox(height: YbsSpace.s3),
+            Row(children: [
+              _pill('나 · ${m.roleLabel}', YbsColor.go300, YbsColor.go600, YbsColor.go500.withValues(alpha: 0.10)),
+              const SizedBox(width: YbsSpace.s2 + 2),
+              Flexible(child: _pill('상대 · ${m.opponentLabel}', YbsColor.live400, YbsColor.live600, YbsColor.live500.withValues(alpha: 0.10))),
+            ]),
+          ],
+        ),
+      );
+
+  Widget _personalCard(BattleMatch m) => Container(
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: YbsColor.surfaceCard,
+          border: Border.all(color: YbsColor.borderSoft),
+          borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label('당신의 상황'),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(m.personal, style: const TextStyle(fontSize: YbsType.sub, height: 1.6, color: YbsColor.textBody)),
+          ],
+        ),
+      );
+
+  Widget _goalCard(BattleMatch m) => Container(
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: YbsColor.surfaceCard,
+          border: Border.all(color: YbsColor.go600),
+          borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+          boxShadow: [BoxShadow(color: YbsColor.go500.withValues(alpha: 0.10), blurRadius: 22)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label('목표', color: YbsColor.go400),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(m.goal,
+                style: const TextStyle(fontFamily: YbsType.display, fontSize: 19, height: 1.3, color: YbsColor.textHero)),
+            if (m.winNote.isNotEmpty) ...[
+              const SizedBox(height: YbsSpace.s3),
+              Container(
+                padding: const EdgeInsets.only(top: YbsSpace.s3),
+                decoration: const BoxDecoration(border: Border(top: BorderSide(color: YbsColor.borderSoft))),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.emoji_events_outlined, size: 15, color: YbsColor.sky400),
+                    const SizedBox(width: YbsSpace.s2),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(children: [
+                          const TextSpan(text: '승패  ', style: TextStyle(fontWeight: FontWeight.w700, color: YbsColor.sky400)),
+                          TextSpan(text: m.winNote, style: const TextStyle(color: YbsColor.textSub)),
+                        ]),
+                        style: const TextStyle(fontSize: 13, height: 1.45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: YbsSpace.s2),
-          body,
-          const SizedBox(height: YbsSpace.s2),
-          Text(note, style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
+
+  Widget _hardLineCard(BattleMatch m) => Container(
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: YbsColor.live500.withValues(alpha: 0.05),
+          border: Border.all(color: YbsColor.live600),
+          borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(children: [
+                  const Icon(Icons.do_not_disturb_on_outlined, size: 15, color: YbsColor.live400),
+                  const SizedBox(width: 6),
+                  _label('물러설 수 없는 선', color: YbsColor.live400),
+                ]),
+                Text('HARD LINE',
+                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(10), color: YbsColor.live400)),
+              ],
+            ),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(m.hardLine,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.5, color: YbsColor.textHero)),
+            if (m.exceptions.isNotEmpty) ...[
+              const SizedBox(height: YbsSpace.s3),
+              Container(
+                padding: const EdgeInsets.only(top: YbsSpace.s3),
+                decoration: const BoxDecoration(border: Border(top: BorderSide(color: YbsColor.borderSoft))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('단, 이 선은 이렇게 움직여요', color: YbsColor.amber400),
+                    const SizedBox(height: YbsSpace.s2 + 2),
+                    for (final e in m.exceptions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: YbsSpace.s2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.subdirectory_arrow_right, size: 14, color: YbsColor.amber400),
+                            ),
+                            const SizedBox(width: YbsSpace.s2),
+                            Expanded(child: Text(e, style: const TextStyle(fontSize: 13, height: 1.45, color: YbsColor.textBody))),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+
+  Widget _secretCard(BattleMatch m) => Container(
+        padding: const EdgeInsets.all(YbsSpace.s4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16130A),
+          border: Border.all(color: YbsColor.gold500),
+          borderRadius: BorderRadius.circular(YbsRadius.lg - 4),
+          boxShadow: [BoxShadow(color: YbsColor.gold400.withValues(alpha: 0.10), blurRadius: 22)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(children: [
+                  const Icon(Icons.lock_outline, size: 14, color: YbsColor.gold300),
+                  const SizedBox(width: 6),
+                  _label('들키면 안 되는 비밀', color: YbsColor.gold300),
+                ]),
+                Text('TOP SECRET',
+                    style: TextStyle(fontFamily: YbsType.numeric, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: YbsType.labelTracking(10), color: YbsColor.gold400)),
+              ],
+            ),
+            const SizedBox(height: YbsSpace.s2 + 2),
+            Text(m.secret,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.6, color: Color(0xFFF5E6C0))),
+            const SizedBox(height: YbsSpace.s2),
+            const Text('나만 볼 수 있어요 — 상대가 눈치채면 불리해져요',
+                style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
+          ],
+        ),
+      );
 }

@@ -13,24 +13,10 @@ import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from . import db, llm
+from . import db, llm, scenarios
 from .auth import user_id_from_token
 
 router = APIRouter()
-
-# 데모 시나리오 (P1: Gemini 시나리오 생성기로 교체 — FSD 6.3)
-DEMO_SCENARIO = {
-    "situation": "온라인 쇼핑몰 「급배송」 환불 분쟁. 민원인이 3주째 환불을 요구하고 있습니다.",
-    "secrets": {
-        "claimant": "통화 2분 안에 「전액 환불」 확답 받아내기",
-        "agent": "환불 없이 만족도 3점 이상으로 통화를 종료하세요.",
-    },
-    "rule_card": "고객이 소비자원 신고를 언급하면 접수 의무가 발생합니다.",
-    "opening_lines": {
-        "claimant": "3주째 환불이 안 되고 있는데요, 오늘은 확답을 듣고 싶어요.",
-        "agent": "안녕하세요, 고객센터입니다. 어떤 부분이 불편하셨는지 여쭤봐도 될까요?",
-    },
-}
 
 
 async def _run_judge_llm(prompt: str, task: str = "final_judge",
@@ -73,10 +59,11 @@ def _extract_json(raw: str) -> dict:
 
 
 class Room:
-    def __init__(self, room_id: str, players: dict[str, dict]):
+    def __init__(self, room_id: str, players: dict[str, dict], scenario: dict):
         self.id = room_id
         self.state = "matched"
-        self.players = players  # user_id -> {role, form_factor, nickname, secret_goal, rule_card}
+        self.scenario = scenario  # scenarios.py 항목 (situation·roles·판정 규칙)
+        self.players = players  # user_id -> {role, form_factor, nickname, brief(dict)}
         self.sockets: dict[str, WebSocket] = {}
         self.spectators: list[WebSocket] = []  # 관전자(읽기 전용) — 비밀 제외 브로드캐스트만
         self.ready: set[str] = set()
@@ -126,12 +113,19 @@ class Room:
                     else 100 - self.momentum_agent)
                 for uid in self.players
             },
+            "situation": self.scenario["situation"],
+            "scenarioTitle": self.scenario["title"],
             "players": {
                 p["role"]: {
                     "nickname": p["nickname"],
                     "formFactor": p["form_factor"],
-                    "secretGoal": p["secret_goal"],
-                    "ruleCard": p["rule_card"],
+                    "roleLabel": p["brief"]["label"],
+                    "goal": p["brief"]["goal"],
+                    "hardLine": p["brief"]["hard_line"],
+                    "secret": p["brief"]["secret"],
+                    # 하위호환(관전 화면 기존 필드): 목표/비밀을 secretGoal로 노출
+                    "secretGoal": p["brief"]["secret"],
+                    "ruleCard": None,
                 }
                 for p in self.players.values()
             },
@@ -266,28 +260,28 @@ class Room:
                 }, ensure_ascii=False))
 
     def _incremental_prompt(self, delta_utts: list[dict]) -> str:
-        agent = self.players[self._role_uid("agent")]
-        claimant = self.players[self._role_uid("claimant")]
+        a = self.players[self._role_uid("agent")]["brief"]
+        c = self.players[self._role_uid("claimant")]["brief"]
         log = "\n".join(
             f"({u['t_start_ms'] // 1000}s) {u['role']}: {u['text']}" for u in delta_utts) \
             or "(지난 20초간 아무도 발화하지 않음 — 침묵이 이어지고 있다)"
         fired = ", ".join(self._judge_events_fired[-5:]) or "없음"
-        return f"""너는 전화 배틀 게임 '여보세요'의 실시간 심판이다. 방금 오간 발화만 보고 즉각 판정해 JSON만 출력해라.
+        return f"""너는 전화 협상 배틀 게임 '여보세요'의 실시간 심판이다. 방금 오간 발화만 보고 즉각 판정해 JSON만 출력해라.
 
-[공통 상황] {DEMO_SCENARIO['situation']}
-[agent(상담원) 비밀 목표] {agent['secret_goal']}
-[agent 규칙 카드] {agent['rule_card']}
-[claimant(민원인) 비밀 목표] {claimant['secret_goal']}
+[공통 상황] {self.scenario['situation']}
+[agent = {a['label']}] 목표: {a['goal']} / 물러설 수 없는 선: {a['hard_line']} / 들키면 안 되는 비밀: {a['secret']}
+[claimant = {c['label']}] 목표: {c['goal']} / 물러설 수 없는 선: {c['hard_line']} / 들키면 안 되는 비밀: {c['secret']}
 [현재 기세] agent {self.momentum_agent} : claimant {100 - self.momentum_agent}
 [이미 발동된 이벤트] {fired}
 [새 발화] (초 발화자: 내용)
 {log}
 
 규칙:
-- momentumDelta: -15~15 정수, agent 관점(+는 agent 우세). 설득 우위를 가져간 쪽으로. 특기할 것 없으면 0.
-- 침묵 턴(새 발화 없음)이면: 시간을 끌어 이득을 보는 쪽·대화를 회피하는 쪽에 -5~-2 수준의 페널티를 줘라 (버티기는 승리 전략이 아니다). 힌트로 침묵을 깰 첫마디를 제안해라.
-- event: 이번 발화에서 결정적 순간이 있을 때만 6자 내외 한 문구("규칙 카드 발동!", "논리 클린히트!", "감정 폭발 페널티"). 이미 발동된 이벤트와 중복 금지. 없으면 null.
-- hintAgent / hintClaimant: 각자에게 주는 한 줄 화술 코치. ★상대의 비밀 목표·규칙 카드 내용을 절대 누설하지 마라.
+- momentumDelta: -15~15 정수, agent 관점(+는 agent 우세). 협상 주도권·설득 우위를 가져간 쪽으로. 특기할 것 없으면 0.
+- 상대의 비밀을 정확히 짚어 흔든 쪽, 또는 자기 비밀을 스스로 노출해 주도권을 잃은 쪽을 기세에 반영해라.
+- 침묵 턴(새 발화 없음)이면: 시간을 끌어 회피하는 쪽에 -5~-2 페널티. 힌트로 침묵을 깰 첫마디를 제안해라.
+- event: 결정적 순간이 있을 때만 6자 내외 한 문구("비밀 간파!", "선 넘음 위기", "논리 클린히트"). 이미 발동된 이벤트와 중복 금지. 없으면 null.
+- hintAgent / hintClaimant: 각자에게 주는 한 줄 화술 코치. ★상대의 비밀·목표를 절대 누설하지 마라.
 - caster: 관전자용 실황 중계 한 줄 (양쪽 비밀 미포함, 스포츠 캐스터 톤).
 
 출력 JSON (다른 텍스트 금지):
@@ -300,26 +294,57 @@ class Room:
                 return uid
         return None
 
+    def _brief_public(self, brief: dict) -> dict:
+        """결과 화면(4c)에서 양측 카드에 그대로 뿌릴 브리핑 필드."""
+        return {
+            "label": brief["label"],
+            "goal": brief["goal"],
+            "winNote": brief["win_note"],
+            "hardLine": brief["hard_line"],
+            "exceptions": brief["exceptions"],
+            "secret": brief["secret"],
+            "secretGoal": brief["secret"],  # 하위호환
+        }
+
     async def _judge(self) -> dict:
-        """전체 트랜스크립트 정밀 심판 (FSD 4.4). LLM 출력은 role 키 →
-        서버가 user_id 키 verdict로 변환(UUID를 LLM에 출력시키지 않는다)."""
+        """전체 트랜스크립트 정밀 심판 — LLM은 settlement(합의 결과)와 과정 점수만
+        추출하고, '물러설 수 없는 선' 위반→자동 패배 판정은 코드가 규칙으로 내린다
+        (scenarios.decide_winner). LLM 출력 role 키 → 서버가 user_id 키로 변환."""
         try:
             raw = await _run_judge_llm(self._judge_prompt())
             j = _extract_json(raw)
-            winner = j.get("winner")
-            winner_uid = self._role_uid(winner) if winner in ("agent", "claimant") else None
-            momentum = j.get("momentum") or {}
+            if not j:
+                raise ValueError("empty judge json")
+            settlement = j.get("settlement") or {}
+            jp_all = j.get("players") or {}
+
+            def score(role: str) -> int:
+                v = (jp_all.get(role) or {}).get("goalScore")
+                return max(0, min(100, int(v))) if isinstance(v, (int, float)) else 50
+
+            sa, sc = score("agent"), score("claimant")
+            winner_role, crossed = scenarios.decide_winner(self.scenario, settlement, sa, sc)
+            winner_uid = self._role_uid(winner_role) if winner_role else None
+            total = sa + sc or 1
+            momentum_by_role = {"agent": round(sa / total * 100)}
+            momentum_by_role["claimant"] = 100 - momentum_by_role["agent"]
+
             players_out = {}
             for uid, p in self.players.items():
-                jp = (j.get("players") or {}).get(p["role"]) or {}
+                role = p["role"]
+                jp = jp_all.get(role) or {}
+                line_held = not crossed.get(role, False)
                 players_out[uid] = {
-                    "role": p["role"],
+                    "role": role,
                     "nickname": p["nickname"],
-                    "secretGoal": p["secret_goal"],  # 종료 후 공개 (페이오프)
-                    "ruleCard": p["rule_card"],
-                    "goalAchieved": jp.get("goalAchieved") is True,
+                    **self._brief_public(p["brief"]),
+                    "lineHeld": line_held,
+                    "crossedLine": not line_held,
+                    "secretExposed": jp.get("secretExposed") is True,
+                    "goalScore": score(role),
+                    # goalAchieved: 선을 지켰고 목표 점수가 준수하면 달성으로 (DB·기존 UI 호환)
+                    "goalAchieved": line_held and score(role) >= 55,
                     "goalNote": jp.get("goalNote") or "",
-                    "ruleNote": jp.get("ruleNote") or "",
                     "rubric": jp.get("rubric") or [],
                     "improvement": jp.get("improvement") or {},
                 }
@@ -327,10 +352,8 @@ class Room:
             return {
                 "winnerUserId": winner_uid,
                 "verdictLine": j.get("verdictLine") or "",
-                "momentum": {
-                    uid: int(momentum.get(p["role"], 50))
-                    for uid, p in self.players.items()
-                },
+                "settlementSummary": settlement.get("summary") or "",
+                "momentum": {uid: momentum_by_role[p["role"]] for uid, p in self.players.items()},
                 "players": players_out,
                 "keyQuote": {
                     "userId": self._role_uid(kq.get("speaker", "")),
@@ -343,16 +366,19 @@ class Room:
             return {
                 "winnerUserId": None,
                 "verdictLine": "심판을 완료하지 못했어요 — 무승부로 처리했습니다.",
+                "settlementSummary": "",
                 "momentum": {uid: 50 for uid in self.players},
                 "players": {
                     uid: {
                         "role": p["role"],
                         "nickname": p["nickname"],
-                        "secretGoal": p["secret_goal"],
-                        "ruleCard": p["rule_card"],
+                        **self._brief_public(p["brief"]),
+                        "lineHeld": None,
+                        "crossedLine": None,
+                        "secretExposed": None,
+                        "goalScore": 50,
                         "goalAchieved": None,
                         "goalNote": "",
-                        "ruleNote": "",
                         "rubric": [],
                         "improvement": {},
                     }
@@ -361,45 +387,74 @@ class Room:
                 "keyQuote": {},
             }
 
+    def _settlement_spec(self) -> str:
+        """이 시나리오의 settlement 추출 지침 (금액·범주·조건)."""
+        sc = self.scenario
+        lines = ['- dealReached: 거래/합의가 실제로 성사됐으면 true, 결렬·미합의면 false.']
+        if sc.get("metric_label"):
+            lines.append(f'- metricValue: {sc["metric_label"]}을 정수(원 단위, 예 265000)로. 합의 못 했으면 null.')
+        else:
+            lines.append('- metricValue: null (이 시나리오는 금액이 없다).')
+        if sc.get("categories"):
+            cats = " / ".join(f'"{c["key"]}"={c["desc"]}' for c in sc["categories"])
+            lines.append(f'- outcomeCategory: 통화 결과를 다음 중 하나로 — {cats}.')
+        else:
+            lines.append('- outcomeCategory: null.')
+        if sc.get("conditions"):
+            conds = " / ".join(f'"{c["key"]}"={c["desc"]}' for c in sc["conditions"])
+            lines.append(f'- conditionsMet: 실제로 충족된 조건 key들의 배열(없으면 []) — {conds}.')
+        else:
+            lines.append('- conditionsMet: [].')
+        lines.append('- summary: 합의 결과를 짧은 한 줄로(예 "26만 5천원에 직거래 합의" / "정산 결렬").')
+        return "\n".join(lines)
+
     def _judge_prompt(self) -> str:
         def mmss(ms: int) -> str:
             s = ms // 1000
             return f"{s // 60:02d}:{s % 60:02d}"
 
-        agent = self.players[self._role_uid("agent")]
-        claimant = self.players[self._role_uid("claimant")]
+        def role_block(role: str) -> str:
+            b = self.players[self._role_uid(role)]["brief"]
+            exc = " ".join(b["exceptions"])
+            return (f"[{role} = {b['label']}]\n"
+                    f"  목표: {b['goal']} ({b['win_note']})\n"
+                    f"  물러설 수 없는 선: {b['hard_line']} 예외: {exc}\n"
+                    f"  들키면 안 되는 비밀: {b['secret']}")
+
         log = "\n".join(
             f"({mmss(u['t_start_ms'])}) {u['role']}: {u['text']}" for u in self.utterances
         ) or "(발화 없음)"
-        return f"""너는 전화 배틀 게임 '여보세요'의 최종 심판이다. 아래 통화를 평가해 JSON만 출력해라.
+        return f"""너는 전화 협상 배틀 게임 '여보세요'의 최종 심판이다. 아래 통화를 평가해 JSON만 출력해라.
+승패(선 위반 = 자동 패배)는 시스템이 규칙으로 계산하므로, 너는 '합의 결과(settlement)'를 정확히 추출하고 과정을 채점만 하면 된다.
 
-[공통 상황] {DEMO_SCENARIO['situation']}
-[agent(상담원) 비밀 목표] {agent['secret_goal']}
-[agent 규칙 카드] {agent['rule_card']}
-[claimant(민원인) 비밀 목표] {claimant['secret_goal']}
+[공통 상황] {self.scenario['situation']}
+{role_block("agent")}
+{role_block("claimant")}
 [통화 중 실시간 심판이 포착한 이벤트] {", ".join(self._judge_events_fired) or "없음"}
 [통화 기록] (mm:ss 발화자: 내용)
 {log}
 
-평가 규칙:
-- 과정 점수로 판정해라 — 시간 끌기·버티기는 승리 전략이 아니다.
-- [실시간 이벤트]는 통화 중 심판이 포착한 결정적 순간들이다 — 판정 근거로 활용하되, 최종 판단은 전체 통화 기록을 직접 보고 내려라.
-- 각 플레이어의 비밀 목표 달성 여부(goalAchieved)를 실제 대사 근거로 판단하고, goalNote에 근거를 한 줄로.
-- agent의 ruleNote에는 규칙 카드 발동·대응 여부를 한 줄로 (발동 안 했으면 "발동 없음").
-- rubric은 역할에 맞는 항목 2~3개 (label, score 1~5, comment는 실제 대사 인용 포함).
-- improvement는 각자 서툴렀던 순간 1개 (situation=실제 발화, better=이렇게 말했다면).
-- momentum은 최종 기세 (두 값의 합 = 100).
-- keyQuote는 판을 결정지은 실제 대사 1개.
-- 발화가 매우 적으면 무승부(winner="draw")로 판정해라.
+먼저 통화에서 최종 합의 결과를 추출해라(settlement):
+{self._settlement_spec()}
+
+그다음 각 역할을 채점해라:
+- goalScore(0~100): 자기 목표를 얼마나 잘 이뤘는가 + 과정(말투·근거·감정 조절). 버티기·시간 끌기는 감점.
+- secretExposed: 자기 '들키면 안 되는 비밀'을 상대가 정확히 간파해 파고들었거나 스스로 노출했으면 true.
+- goalNote: 판단 근거 한 줄(실제 대사 인용).
+- rubric: 역할에 맞는 항목 2~3개 (label, score 1~5, comment는 실제 대사 인용 포함).
+- improvement: 서툴렀던 순간 1개 (situation=실제 발화, better=이렇게 말했다면).
+- verdictLine: 이 판을 한 줄로 요약한 판정 근거.
+- keyQuote: 판을 결정지은 실제 대사 1개.
+- 발화가 매우 적으면 dealReached=false, goalScore는 양쪽 모두 45~55로.
 
 출력 JSON 스키마 (다른 텍스트 금지):
-{{"winner": "agent"|"claimant"|"draw", "verdictLine": "한 줄 판정 근거",
- "momentum": {{"agent": 0-100, "claimant": 0-100}},
+{{"settlement": {{"dealReached": bool, "metricValue": number|null, "outcomeCategory": string|null, "conditionsMet": [string], "summary": "…"}},
+ "verdictLine": "한 줄 판정 근거",
  "players": {{
-   "agent": {{"goalAchieved": bool, "goalNote": "근거", "ruleNote": "규칙 대응",
+   "agent": {{"goalScore": 0-100, "secretExposed": bool, "goalNote": "근거",
              "rubric": [{{"label": "항목", "score": 1-5, "comment": "인용 포함"}}],
              "improvement": {{"situation": "실제 발화", "better": "이렇게 말했다면"}}}},
-   "claimant": {{"goalAchieved": bool, "goalNote": "근거", "ruleNote": "",
+   "claimant": {{"goalScore": 0-100, "secretExposed": bool, "goalNote": "근거",
                 "rubric": [{{"label": "항목", "score": 1-5, "comment": "인용 포함"}}],
                 "improvement": {{"situation": "실제 발화", "better": "이렇게 말했다면"}}}}}},
  "keyQuote": {{"speaker": "agent"|"claimant", "text": "실제 대사", "note": "왜 결정적이었는지"}}}}"""
@@ -431,33 +486,35 @@ rooms: dict[str, Room] = {}
 
 
 async def create_room(a: dict, b: dict) -> Room:
-    """매칭 성사 → 역할 랜덤 배정 + 비밀 자기 몫만 (규칙 #2)."""
+    """매칭 성사 → 시나리오 랜덤 선택 + 역할(A=agent/B=claimant) 랜덤 배정.
+    각 유저에겐 자기 몫 브리핑만 전송한다(규칙 #2 — matching.py)."""
+    scenario = scenarios.pick()
     users = [a, b]
     random.shuffle(users)
-    roles = ["claimant", "agent"]
+    roles = ["agent", "claimant"]
     players = {}
     for user, role in zip(users, roles):
         players[user["user_id"]] = {
             **user,
             "role": role,
-            "secret_goal": DEMO_SCENARIO["secrets"][role],
-            "rule_card": DEMO_SCENARIO["rule_card"] if role == "agent" else None,
-            "opening_line": DEMO_SCENARIO["opening_lines"][role],
+            "brief": scenario["roles"][role],  # 5필드 브리핑 + 칩 + 첫마디 + 규칙
         }
     room_id = str(uuid.uuid4())
-    room = Room(room_id, players)
+    room = Room(room_id, players, scenario)
     rooms[room_id] = room
     if db.pool:
         await db.pool.execute(
             "INSERT INTO battle_rooms (id, state, scenario, time_limit_s) VALUES ($1,'matched',$2,$3)",
-            uuid.UUID(room_id), json.dumps({"situation": DEMO_SCENARIO["situation"]}, ensure_ascii=False),
+            uuid.UUID(room_id),
+            json.dumps({"id": scenario["id"], "title": scenario["title"],
+                        "situation": scenario["situation"]}, ensure_ascii=False),
             room.time_limit_s)
         for uid, p in players.items():
             await db.pool.execute(
                 "INSERT INTO battle_players (room_id, user_id, role, form_factor, secret_goal, rule_card)"
                 " VALUES ($1,$2,$3,$4,$5,$6)",
                 uuid.UUID(room_id), uuid.UUID(uid), p["role"], p["form_factor"],
-                p["secret_goal"], p["rule_card"])
+                p["brief"]["secret"], None)
     return room
 
 

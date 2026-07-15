@@ -289,7 +289,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
         ]),
         const SizedBox(height: YbsSpace.s4 - 2),
         _card(children: [
-          _cardLabel('${match.opponentNickname} · ${match.opponentRoleLabel} 루브릭'),
+          _cardLabel('${match.opponentNickname} · ${match.opponentLabel} 루브릭'),
           const SizedBox(height: YbsSpace.s4 - 2),
           ..._rubricRows(_player(_oppId)),
         ]),
@@ -298,54 +298,12 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
     );
   }
 
-  // ---- 탭 B 비밀 공개 ----
+  // ---- 탭 B 비밀 공개 (4c) — 나 vs 상대 비교 + 선/비밀 플래그 ----
   Widget _secretsTab(BattleRoomController room) {
-    final match = room.match;
     final me = _player(_myId);
     final opp = _player(_oppId);
-
-    Widget resultTag(String label, {required bool good}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            border: Border.all(color: good ? YbsColor.go600 : YbsColor.live600),
-            borderRadius: BorderRadius.circular(YbsRadius.xs),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontFamily: YbsType.numeric,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: good ? YbsColor.go400 : YbsColor.live400)),
-        );
-
-    Widget secretCard({
-      required String title,
-      required Color labelColor,
-      required Color? borderColor,
-      required Color bg,
-      required String secret,
-      required bool? achieved,
-      required String note,
-    }) =>
-        _card(
-          border: borderColor,
-          bg: bg,
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Flexible(child: _cardLabel(title, color: labelColor)),
-              if (achieved != null) resultTag(achieved ? '달성' : '실패', good: achieved),
-            ]),
-            const SizedBox(height: YbsSpace.s2 + 2),
-            Text(secret,
-                style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: YbsColor.textHero)),
-            if (note.isNotEmpty) ...[
-              const SizedBox(height: YbsSpace.s2),
-              Text(note, style: const TextStyle(fontSize: YbsType.micro, height: 1.5, color: YbsColor.textSub)),
-            ],
-          ],
-        );
-
-    final keyQuote = _verdict['keyQuote'] as Map<String, dynamic>? ?? const {};
+    final winnerId = _verdict['winnerUserId'] as String?;
+    final summary = _verdict['settlementSummary'] as String? ?? '';
     return ListView(
       padding: const EdgeInsets.fromLTRB(YbsSpace.s5, 26, YbsSpace.s5, 0),
       children: [
@@ -354,56 +312,119 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
               style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1.2, color: YbsColor.gold300)),
         ),
         const SizedBox(height: 6),
-        const Center(
-          child: Text('이제야 보이는 진실', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+        Center(
+          child: Text(summary.isNotEmpty ? '최종 합의 · $summary' : '두 사람의 비밀이 모두 공개됐어요',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: YbsColor.textSub)),
         ),
         const SizedBox(height: YbsSpace.s5),
-        secretCard(
-          title: '나 · ${match.roleLabel}의 비밀 목표',
-          labelColor: YbsColor.go400,
-          borderColor: YbsColor.go600,
-          bg: YbsColor.go500.withValues(alpha: 0.06),
-          secret: match.secretGoal,
-          achieved: me['goalAchieved'] as bool?,
-          note: me['goalNote'] as String? ?? '',
-        ),
-        if (match.ruleCard != null) ...[
-          const SizedBox(height: YbsSpace.s4 - 2),
-          secretCard(
-            title: '나의 규칙 카드',
-            labelColor: YbsColor.live400,
-            borderColor: YbsColor.borderIncall,
-            bg: YbsColor.live500.withValues(alpha: 0.05),
-            secret: match.ruleCard!,
-            achieved: null,
-            note: me['ruleNote'] as String? ?? '',
+        _revealCard(me, mine: true, won: winnerId != null && winnerId == _myId, draw: winnerId == null),
+        const SizedBox(height: YbsSpace.s3),
+        const Center(child: Text('VS', style: TextStyle(fontFamily: YbsType.display, fontSize: 16, color: YbsColor.live500))),
+        const SizedBox(height: YbsSpace.s3),
+        _revealCard(opp, mine: false, won: winnerId != null && winnerId == _oppId, draw: winnerId == null),
+        const SizedBox(height: YbsSpace.s4),
+      ],
+    );
+  }
+
+  Widget _flagRow(String text, {required bool good}) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(good ? Icons.verified_user_outlined : Icons.warning_amber_rounded,
+              size: 15, color: good ? YbsColor.go400 : YbsColor.live400),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.4, color: good ? YbsColor.go300 : YbsColor.live400)),
           ),
         ],
-        const SizedBox(height: YbsSpace.s4 - 2),
-        secretCard(
-          title: '${match.opponentNickname} · ${match.opponentRoleLabel}의 비밀 목표',
-          labelColor: YbsColor.live400,
-          borderColor: YbsColor.live600,
-          bg: YbsColor.live500.withValues(alpha: 0.06),
-          secret: opp['secretGoal'] as String? ?? '(공개 데이터 없음)',
-          achieved: opp['goalAchieved'] as bool?,
-          note: opp['goalNote'] as String? ?? '',
+      );
+
+  Widget _fieldRow(String tag, Color tagColor, Color tagBg, String text, {bool strike = false}) => Padding(
+        padding: const EdgeInsets.only(bottom: YbsSpace.s2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(YbsRadius.xs)),
+              child: Text(tag, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: tagColor)),
+            ),
+            const SizedBox(width: YbsSpace.s2 + 2),
+            Expanded(
+              child: Text(text,
+                  style: TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: strike ? YbsColor.textFaint : YbsColor.textBody,
+                      decoration: strike ? TextDecoration.lineThrough : null)),
+            ),
+          ],
         ),
-        if ((keyQuote['text'] as String?)?.isNotEmpty == true) ...[
-          const SizedBox(height: YbsSpace.s4 - 2),
-          _card(children: [
-            _cardLabel('결정적 발언'),
-            const SizedBox(height: 6),
-            Text('「${keyQuote['text']}」',
-                style: const TextStyle(fontSize: YbsType.sub, height: 1.55, color: YbsColor.textBody)),
-            if ((keyQuote['note'] as String?)?.isNotEmpty == true) ...[
-              const SizedBox(height: 6),
-              Text(keyQuote['note'] as String,
-                  style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 11, color: YbsColor.textFaint)),
+      );
+
+  /// 한쪽(나/상대)의 공개 카드 — 목표·선(지켜냄/넘음)·비밀(들킴/안들킴).
+  Widget _revealCard(Map<String, dynamic> p, {required bool mine, required bool won, required bool draw}) {
+    final label = p['label'] as String? ?? (mine ? '나' : '상대');
+    final goal = p['goal'] as String? ?? '';
+    final hardLine = p['hardLine'] as String? ?? '';
+    final secret = p['secret'] as String? ?? '';
+    final crossed = p['crossedLine'] as bool?;
+    final exposed = p['secretExposed'] as bool?;
+    final accent = mine ? YbsColor.go400 : YbsColor.live400;
+    final border = mine ? YbsColor.go600 : YbsColor.live600;
+    final title = mine ? '나 · $label' : '상대 · $label';
+    final tag = draw ? 'DRAW' : (won ? 'WIN' : 'LOSE');
+    return _card(
+      border: border,
+      bg: (mine ? YbsColor.go500 : YbsColor.live500).withValues(alpha: 0.05),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: accent))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                border: Border.all(color: won ? YbsColor.gold500 : YbsColor.borderStrong),
+                borderRadius: BorderRadius.circular(YbsRadius.xs),
+              ),
+              child: Text(tag,
+                  style: TextStyle(fontFamily: YbsType.numeric, fontSize: 11, fontWeight: FontWeight.w700, color: won ? YbsColor.gold400 : YbsColor.textFaint)),
+            ),
+          ],
+        ),
+        const SizedBox(height: YbsSpace.s3),
+        _fieldRow('목표', YbsColor.go400, YbsColor.go500.withValues(alpha: 0.10), goal),
+        Container(
+          margin: const EdgeInsets.only(top: 2, bottom: YbsSpace.s2),
+          padding: const EdgeInsets.all(YbsSpace.s3),
+          decoration: BoxDecoration(color: YbsColor.surfaceInset, borderRadius: BorderRadius.circular(YbsRadius.sm + 2)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldRow('선', YbsColor.live400, YbsColor.live500.withValues(alpha: 0.12), hardLine, strike: crossed == true),
+              if (crossed != null) _flagRow(crossed ? '물러설 수 없는 선을 넘음 — 자동 패배' : '물러설 수 없는 선 지켜냄', good: !crossed),
             ],
-          ]),
-        ],
-        const SizedBox(height: YbsSpace.s4),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(YbsSpace.s3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16130A),
+            border: Border.all(color: YbsColor.gold500),
+            borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldRow('비밀', YbsColor.gold300, YbsColor.gold400.withValues(alpha: 0.12), secret),
+              if (exposed != null) _flagRow(exposed ? '비밀 들킴 — 상대가 정확히 짚음' : '비밀 안 들킴 — 주도권 유지', good: !exposed),
+            ],
+          ),
+        ),
       ],
     );
   }

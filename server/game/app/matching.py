@@ -47,14 +47,24 @@ async def match_ws(ws: WebSocket, token: str, form_factor: str = "android"):
             )
             for side, other in ((me, opponent), (opponent, me)):
                 p = room.players[side["user_id"]]
+                b = p["brief"]                                  # ★자기 몫만 (규칙 #2)
+                opp_label = room.players[other["user_id"]]["brief"]["label"]
                 await side["ws"].send_text(json.dumps({
                     "type": "matched",
                     "roomId": room.id,
                     "role": p["role"],
-                    "secretGoal": p["secret_goal"],       # ★자기 몫만
-                    "ruleCard": p["rule_card"],
-                    "openingLine": p["opening_line"],
-                    "situation": "온라인 쇼핑몰 「급배송」 환불 분쟁. 민원인이 3주째 환불을 요구하고 있습니다.",
+                    "scenarioTitle": room.scenario["title"],
+                    "situation": room.scenario["situation"],
+                    "roleLabel": b["label"],
+                    "opponentLabel": opp_label,
+                    "personal": b["personal"],
+                    "goal": b["goal"],
+                    "winNote": b["win_note"],
+                    "hardLine": b["hard_line"],
+                    "exceptions": b["exceptions"],
+                    "secret": b["secret"],
+                    "chip": b["chip"],
+                    "openingLine": b["opening_line"],
                     "opponent": {"nickname": other["nickname"], "formFactor": other["form_factor"]},
                 }, ensure_ascii=False))
         # 소켓 유지 (매칭 후엔 클라가 닫고 /ws/room으로 이동)

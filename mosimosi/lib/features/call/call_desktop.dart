@@ -2,101 +2,136 @@ import 'package:flutter/material.dart';
 
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
+import '../battle/battle_room.dart';
 
-/// 데스크톱 통화 스테이지 조립 — 프로토타입 InCallDesktopScreen.jsx 이식.
-/// 상단 모멘텀 게이지 + 좌(비밀목표/규칙/타임라인) · 중앙 폰 · 우(코치/캡션로그).
-/// 프로토타입은 통화 데스크톱 스테이지를 하나(InCallDesktopScreen)로 정의하므로
-/// 보스전·배틀이 같은 스테이지를 공유하고, 중앙 폰 본문과 게이지 상대 라벨만 다르다.
+/// 배틀 통화 데스크톱 스테이지 (4b 데스크톱 — 좌측 5필드 HUD 상시 노출).
+/// 상단 기세 게이지 + 좌(목표·상황·물러설 수 없는 선·비밀) · 중앙 폰 · 우(코치·캡션 로그).
+/// 보스전은 CallDesktopStage를 직접 조립하므로, 이 헬퍼는 배틀 전용이다.
 Widget buildCallDesktopStage({
   required Widget phone,
-  required String rightLabel,
+  required BattleMatch match,
   required double momentum,
-  required String mission,
+  required String coachHint,
+  required List<({bool mine, String text})> captions,
   required bool showOpponentCaptions,
 }) {
   const panelText = TextStyle(fontSize: YbsType.sub, height: YbsType.leadingBody, color: YbsColor.textBody);
 
   return CallDesktopStage(
-    gauge: MomentumGauge(playerFraction: momentum, rightLabel: rightLabel),
+    gauge: MomentumGauge(playerFraction: momentum, rightLabel: match.opponentNickname),
     leftPanels: [
       HudPanel(
-        title: '비밀 목표',
-        label: 'SECRET',
+        title: '목표',
+        label: 'GOAL',
         tone: HudTone.go,
-        child: Text(mission, style: panelText),
-      ),
-      const HudPanel(
-        title: '이번 판의 규칙',
-        label: 'RULE',
-        tone: HudTone.live,
-        child: Text('"어…" "그…" 같은 군말 5회 초과 시 기세 −10.', style: panelText),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(match.goal,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.35, color: YbsColor.textHero)),
+            if (match.winNote.isNotEmpty) ...[
+              const SizedBox(height: YbsSpace.s2),
+              Text.rich(
+                TextSpan(children: [
+                  const TextSpan(text: '승패  ', style: TextStyle(fontWeight: FontWeight.w700, color: YbsColor.sky400)),
+                  TextSpan(text: match.winNote, style: const TextStyle(color: YbsColor.textSub)),
+                ]),
+                style: const TextStyle(fontSize: YbsType.micro, height: 1.45),
+              ),
+            ],
+          ],
+        ),
       ),
       HudPanel(
-        title: '이벤트 타임라인',
+        title: '당신의 상황',
+        tone: HudTone.neutral,
+        child: Text(match.personal, style: panelText),
+      ),
+      HudPanel(
+        title: '물러설 수 없는 선',
+        label: 'HARD LINE',
+        tone: HudTone.live,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(match.hardLine,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, height: 1.45, color: YbsColor.textHero)),
+            for (final e in match.exceptions)
+              Padding(
+                padding: const EdgeInsets.only(top: YbsSpace.s2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(Icons.subdirectory_arrow_right, size: 13, color: YbsColor.amber400),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(e, style: const TextStyle(fontSize: YbsType.micro, height: 1.4, color: YbsColor.textSub))),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      HudPanel(
+        title: '들키면 안 되는 비밀',
+        label: 'TOP SECRET',
+        tone: HudTone.gold,
         expand: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            _Event(t: '00:12', label: '보스가 규정을 언급', color: YbsColor.live400),
-            _Event(t: '00:31', label: '핵심 질문 성공 +12', color: YbsColor.go400),
-            _Event(t: '00:48', label: '침묵 3초 — 기세 하락', color: YbsColor.textFaint),
-            _Event(t: '01:05', label: '조항 번호 요구 +18', color: YbsColor.go400),
+          children: [
+            Text(match.secret,
+                style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w600, height: 1.55, color: Color(0xFFF5E6C0))),
+            const SizedBox(height: YbsSpace.s2),
+            const Text('나만 볼 수 있어요 — 상대가 눈치채면 불리해져요',
+                style: TextStyle(fontSize: YbsType.micro, color: YbsColor.textSub)),
           ],
         ),
       ),
     ],
     phone: phone,
     rightPanels: [
-      const HudPanel(
+      HudPanel(
         title: '코치의 속삭임',
         label: 'LIVE',
         tone: HudTone.gold,
         live: true,
-        child: Text('지금이에요 — 조항 번호를 콕 집어 물어보세요. 침묵을 두려워하지 마세요.', style: panelText),
+        child: Text(
+          coachHint.isEmpty ? '통화가 이어지면 실시간 코치가 힌트를 줘요.' : coachHint,
+          style: coachHint.isEmpty
+              ? const TextStyle(fontSize: YbsType.sub, height: YbsType.leadingBody, color: YbsColor.textFaint)
+              : panelText,
+        ),
       ),
       HudPanel(
         title: '캡션 로그',
         label: 'REC',
         live: true,
         expand: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showOpponentCaptions)
-              _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '네 고객센터입니다. 용건 말씀하세요.', textColor: YbsColor.textFaint),
-            _LogLine(who: '나', whoColor: YbsColor.go400, text: '지난주 주문한 상품 환불 요청드립니다.', textColor: YbsColor.textFaint),
-            if (showOpponentCaptions)
-              _LogLine(who: rightLabel, whoColor: YbsColor.live400, text: '환불은 안 됩니다. 규정이에요.', textColor: YbsColor.textSub),
-            const _LogLine(who: '나', whoColor: YbsColor.go400, text: '어떤 규정인지 조항을 확인해 주시겠어요?', textColor: YbsColor.textBody),
-          ],
-        ),
+        child: captions.isEmpty
+            ? const Text('아직 발화가 없어요.', style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final c in captions)
+                    if (c.mine || showOpponentCaptions)
+                      _LogLine(
+                        who: c.mine ? '나' : match.opponentNickname,
+                        whoColor: c.mine ? YbsColor.go400 : YbsColor.live400,
+                        text: c.text,
+                        textColor: YbsColor.textBody,
+                      ),
+                ],
+              ),
       ),
     ],
   );
-}
-
-class _Event extends StatelessWidget {
-  const _Event({required this.t, required this.label, required this.color});
-  final String t;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: YbsSpace.s3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t, style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.textFaint)),
-          const SizedBox(width: YbsSpace.s3),
-          Expanded(child: Text(label, style: TextStyle(fontSize: YbsType.sub, color: color))),
-        ],
-      ),
-    );
-  }
 }
 
 class _LogLine extends StatelessWidget {
