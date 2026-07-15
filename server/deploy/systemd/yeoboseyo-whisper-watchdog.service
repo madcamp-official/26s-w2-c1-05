@@ -1,0 +1,18 @@
+[Unit]
+Description=Yeoboseyo whisper STT watchdog (health-check + auto-restart)
+# whisper가 뜬 뒤에 시작. whisper가 멈추면 워치독은 재시작을 시도하되,
+# BindsTo가 아니라 느슨한 순서 의존만 둔다(워치독이 whisper를 살리는 쪽이므로).
+After=yeoboseyo-whisper.service
+Wants=yeoboseyo-whisper.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/server/deploy
+# websockets만 있으면 되지만 whisper venv에 이미 있으므로 재사용(별도 설치 불필요).
+ExecStart=/root/venvs/whisper/bin/python /root/server/deploy/whisper_watchdog.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -68,7 +68,7 @@ _QWEN_VOICE_MAP = {
         "voice": "uncle_fu",
         "speed": 1.05,
         "seed": 42,
-        "instructions": "50대 한국 남성, 저녁 피크타임에 바빠서 정신없다가도 손님한테는 확 밝아지는 목소리, 텐션 오르내림이 뚜렷한 사장님 말투",
+        "instructions": "60대 한국 남성, 저녁 피크타임에 바빠서 정신없다가도 손님한테는 확 밝아지는 호탕한 목소리, 텐션 오르내림이 뚜렷한 사장님 말투",
     },
     "ko-KR-Chirp3-HD-Kore": {
         "voice": "vivian",
@@ -81,6 +81,27 @@ _QWEN_VOICE_MAP = {
         "speed": 1.0,
         "seed": 42,
         "instructions": "30대 한국 여성, 처음엔 억지로 차분한 척하다가 점점 짜증이 새어나오는, 감정이 억눌렸다 터지는 말투",
+    },
+    "ko-KR-Chirp3-HD-Puck": {
+        "voice": "dylan",
+        "speed": 1.05,
+        "seed": 42,
+        "instructions": "30대 한국 남성, 곤란해하며 웃음 섞어 얼버무리는, 미안함과 능청스러움이 공존하는 말투",
+    },
+    "ko-KR-Chirp3-HD-Fenrir": {
+        "voice": "uncle_fu",
+        "speed": 0.95,
+        "seed": 42,
+        "instructions": "60대 한국 남성, 느긋하고 위엄 있게 뜸을 들이다가도 근거를 들으면 순간 진지해지는 말투",
+    },
+    # 교수 2종을 같은 화자로 두면 목소리가 안 구분됨 → 대학원 교수는 aiden으로
+    # 분리 (eric=억양·ryan=AI틱으로 이전 청취에서 탈락, dylan은 알바 사장 사용 중.
+    # aiden은 아직 미청취 — 어색하면 이 항목만 바꾸고 서버 재시작).
+    "ko-KR-Chirp3-HD-Orus": {
+        "voice": "aiden",
+        "speed": 1.05,
+        "seed": 42,
+        "instructions": "60대 한국 남성, 들뜨고 호의적인, 칭찬하며 붙잡으려는 다정한 말투",
     },
 }
 
