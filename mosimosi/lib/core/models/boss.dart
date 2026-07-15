@@ -31,7 +31,7 @@ const String bossCommonRules = '''
 [공통 규칙]
 - 인신공격, 욕설, 비하 금지. 실존 업체·인물·전화번호 언급 금지.
 - 전화 통화 상황을 절대 벗어나지 마라. 지문·해설 없이 대사만 말해라.
-- 항상 한국어 구어체로만 답한다.
+- ★반드시 한글로만 답한다★ 한자·중국어·일본어·영어 단어를 절대 섞지 마라. 오직 한국어 문장만 출력한다.
 - ★역할 고정★ 너는 오직 네 역할(보스)의 대사만 말한다. 상대(손님·학생·알바생 등)의 말을 대신 이어 말하지 말고, 상대의 정보(주소·주문 등)를 네가 대신 불러주지 마라. 상대를 네 호칭으로 부르지 마라(예: 교수가 학생을 '교수님'이라 부르지 않는다).
 
 [TTS 표현 규칙 — 음성으로 자연스럽게 들리도록]
@@ -46,15 +46,13 @@ const String bossCommonRules = '''
 - 예시: "[짜증] 아니 그 시간은 안 된다고 말씀드렸잖아요." / "[상냥] 네~ 어떤 걸로 도와드릴까요?"
 
 [통화 종료 규칙 — 자연스러운 마무리]
-- 용건이 자연스럽게 끝났을 때(주문·예약 확정, 요구를 최종 수락 또는 단호히 거절, 작별 인사가 오간 뒤 등)에는 억지로 대화를 이어가지 말고 네가 먼저 통화를 마무리해라.
+- 용건이 자연스럽게 끝났을 때(요구를 최종 수락 또는 단호히 거절, 작별 인사가 오간 뒤 등)에는 억지로 대화를 이어가지 말고 네가 먼저 통화를 마무리해라.
 - 그렇게 끝내는 대사에는 감정 태그 바로 뒤에 [끝]을 붙여라. 그러면 그 대사를 말한 직후 전화가 끊긴다.
-- 예: "[상냥][끝] 네, 주문 접수됐습니다~ 맛있게 드세요!" / "[평온][끝] 더 하실 말씀 없으시면 이만 끊겠습니다."
+- ★마무리 대사는 반드시 네 캐릭터와 이 통화의 용건에 맞게 해라.★ 치킨집 사장이면 "주문 접수됐습니다", "맛있게 드세요" 같은 말. 예약이면 예약 확정 인사, 시급 협상이면 협상 마무리, 성적 상담이면 처리 안내, 환불이면 환불/거절 마무리처럼 네 상황에 맞는 말로 끝내라.
+- 형식 예시(문구는 상황에 맞게 직접 만들 것): "[평온][끝] 네, 그럼 이만 끊겠습니다." / "[미안][끝] 더 도와드리기 어렵네요, 이만 끊을게요."
 - 아직 용건이 안 끝났거나 대화가 이어져야 하면 [끝]을 붙이지 마라. 성급하게 끊지 마라.''';
 
-/// 도감 티어 (디자인: normal=슬레이트, rare=스카이, boss=레드, legend=골드).
-enum BossTier { normal, rare, boss, legend }
-
-/// 보스전 TTS 보이스 프리셋 (`/tts/synthesize` 서버 프록시용).
+/// AI 대전 TTS 보이스 프리셋 (`/tts/synthesize` 서버 프록시용).
 /// 서버가 [voiceName]을 보고 Qwen3-TTS(omni) 화자로 매핑해 우선 시도하고,
 /// 실패 시에만 아래 Chirp3 HD 필드(폴백 안전망)로 합성한다 — Qwen 화자/속도/
 /// 감정지시는 서버의 매핑 테이블에서 관리하므로 클라이언트 변경 없이 튜닝된다.
@@ -97,8 +95,8 @@ class IntroMessage {
   final String time; // '오후 7:41'
 }
 
-/// 보스전 도입 스토리 — 메시지가 순차 재생되고 마지막에 고객센터 번호 +
-/// 발신 버튼으로 보스전에 진입한다 (디자인 2a).
+/// AI 대전 도입 스토리 — 메시지가 순차 재생되고 마지막에 고객센터 번호 +
+/// 발신 버튼으로 AI 대전에 진입한다 (디자인 2a).
 class IntroStory {
   const IntroStory({
     required this.friendName,
@@ -128,8 +126,6 @@ class Boss {
     required this.name,
     required this.subtitle,
     required this.quote,
-    required this.tier,
-    required this.difficultyLevel,
     required this.portraitSyllable,
     required this.scenario,
     required this.personaPrompt,
@@ -138,6 +134,7 @@ class Boss {
     required this.difficulty,
     required this.voicePreset,
     this.introStory,
+    this.llmTemperature,
   });
 
   final String id;
@@ -145,8 +142,6 @@ class Boss {
   final String name;
   final String subtitle; // 도감/발신자 서브라벨
   final String quote; // 대표 대사 (브리핑 「…」)
-  final BossTier tier;
-  final int difficultyLevel; // 별 1~5 (표시용)
   final String portraitSyllable; // 타이포 초상 (디자인 규칙: 첫 음절)
   final String scenario; // 브리핑 용건
   final String personaPrompt; // 페르소나 + few-shot 3개
@@ -155,6 +150,10 @@ class Boss {
   final DifficultyParams difficulty;
   final TtsVoicePreset voicePreset;
   final IntroStory? introStory; // null = 인트로 없이 바로 통화
+
+  /// 보스별 LLM 온도 오버라이드 (null = 서버 기본 0.6). 중국어 코드스위칭이
+  /// 잦은 보스는 더 낮춰(예 0.4) 저확률 CJK 토큰을 억제한다.
+  final double? llmTemperature;
 
   /// 프로필 이미지 에셋 (도감 번호 기준: assets/bossimg/boss{number}.png).
   String get portraitImage => 'assets/bossimg/boss$number.png';

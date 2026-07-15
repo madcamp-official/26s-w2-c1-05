@@ -18,7 +18,6 @@ import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/shell/main_shell.dart';
-import '../features/spike/spike_screen.dart';
 
 /// IA §8 라우트 구조 + §4 GNB: 홈/도감/전적은 셸(탭) 안, 통화·배틀·설정은
 /// 풀스크린. GNB 숨김 화면(2.3/3.x)은 rootNavigatorKey로 셸 밖에 띄운다.
@@ -125,14 +124,10 @@ GoRouter buildRouter({required String initialLocation}) => GoRouter(
       builder: (context, state) =>
           BattleWatchScreen(roomId: state.pathParameters['roomId']!),
     ),
-    // ---- 설정(프로필 → 시트, GNB 미노출) / 개발용 스파이크 ----
+    // ---- 설정(프로필 → 시트, GNB 미노출) ----
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
-    ),
-    GoRoute(
-      path: '/spike',
-      builder: (context, state) => const SpikeScreen(),
     ),
   ],
 );

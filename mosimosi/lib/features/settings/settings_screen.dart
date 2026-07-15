@@ -344,13 +344,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(height: 1, color: YbsColor.borderSoft),
               ],
               _row(
-                icon: Icons.science_outlined,
-                title: 'Day 1 스파이크',
-                onTap: () => context.push('/spike'),
-                trailing: const Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
-              ),
-              const Divider(height: 1, color: YbsColor.borderSoft),
-              _row(
                 icon: Icons.replay,
                 title: '온보딩 다시 보기',
                 onTap: () => context.push('/onboarding'),

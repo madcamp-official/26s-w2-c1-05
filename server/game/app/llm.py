@@ -113,11 +113,13 @@ async def _stream_vllm(req: ChatRequest):
     body = {
         "model": os.getenv("VLLM_MODEL", ""),
         "messages": req.messages,
-        "temperature": req.temperature if req.temperature is not None else 0.6,
+        "temperature": req.temperature if req.temperature is not None else 0.5,
         # top_p<1 로 뉴클리어스 절단, repetition_penalty 로 반복 억제 — 둘 다 안 주면
         # vLLM 기본(top_p=1.0)이라 Qwen3-AWQ가 저확률 CJK 토큰으로 코드스위칭(중국어 섞임)함.
-        # 중국어 섞임이 남아 온도 0.7→0.6, top_p 0.8→0.75로 더 조임.
-        "top_p": 0.75,
+        # 중국어가 계속 새어 전반적으로 더 조임(경직 감수): 온도 0.6→0.5, top_p 0.75→0.6.
+        # CJK 유니코드 블록의 토큰 자체를 금지해 한자 출력을 원천 차단(bad_words 대신 vLLM
+        # logit 제어가 복잡해 프롬프트+샘플링으로 억제 — 남으면 top_p 0.5까지 더 내릴 것).
+        "top_p": 0.6,
         "repetition_penalty": 1.05,
         "max_tokens": req.max_output_tokens or 256,
         "stream": True,

@@ -6,7 +6,7 @@ import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
-/// 2.1 보스 도감 "전설의 진상 도감" — 디자인 E 섹션 이식.
+/// 2.1 보스 도감 "진상 도감" — 디자인 E 섹션 이식.
 /// 모바일 2열 / 데스크톱 4열 + 필터 칩. 8종 중 실데이터는 시드 6종
 /// (No.001/002/003/004/005/008 → 탭 시 브리핑), 나머지는 비주얼 스텁.
 /// 격파·최고점은 GET /users/{id}/progress 실데이터 (Phase 2 §5).
@@ -23,12 +23,12 @@ class _BossListScreenState extends State<BossListScreen> {
 
   // 실보스 6종 (1→chicken … 6→refund). 격파·캡션은 progress에서 계산.
   static const _entries = [
-    _Entry(1, 'chicken', '야식은 치킨이지', '주문 폭주에도 흔들림 없는 자', BossTierUi.normal, 1, false, ''),
-    _Entry(2, 'dental', '아야야 이가 아파요', '3초에 한 문장, 숨 쉴 틈 없음', BossTierUi.normal, 2, false, ''),
-    _Entry(3, 'alba', '시급 협상 대작전!', '오늘도 다음에 얘기하자는 사장', BossTierUi.rare, 3, false, ''),
-    _Entry(4, 'prof_grade', '교수님, 학점이 이상해요!', '성적엔 이유가 있다는 자', BossTierUi.rare, 4, false, ''),
-    _Entry(5, 'prof_gradschool', '대학원생이 될 수는 없어', 'ㅎㅎ로 거절을 막아서는 자', BossTierUi.boss, 4, false, ''),
-    _Entry(6, 'refund', '아니 환불이 안 된다고?', '최종 보스 · 환불은 안 됩니다', BossTierUi.legend, 5, false, ''),
+    _Entry(1, 'chicken', '야식은 치킨이지', '주문 폭주에도 흔들림 없는 자', false, ''),
+    _Entry(2, 'dental', '아야야 이가 아파요', '예약 한 통이 이렇게 힘들 줄이야', false, ''),
+    _Entry(3, 'alba', '시급 협상 대작전!', '오늘도 다음에 얘기하자는 사장', false, ''),
+    _Entry(4, 'prof_grade', '교수님, 학점이 이상해요!', '성적엔 이유가 있다는 자', false, ''),
+    _Entry(5, 'prof_gradschool', '대학원생이 될 수는 없어', 'ㅎㅎ로 거절을 막아서는 자', false, ''),
+    _Entry(6, 'refund', '아니 환불이 안 된다고?', '환불은 안 됩니다', false, ''),
   ];
 
   @override
@@ -60,7 +60,7 @@ class _BossListScreenState extends State<BossListScreen> {
       _entries.where(_cleared).length;
 
   String _caption(_Entry e) {
-    final suffix = e.no == 6 ? ' · 최종 보스' : '';
+    const suffix = '';
     final progress = _progress;
     if (progress == null) return '…'; // 로딩/연결 실패
     final p = progress[e.id];
@@ -104,8 +104,6 @@ class _BossListScreenState extends State<BossListScreen> {
                           number: e.no,
                           name: e.name,
                           title: e.title,
-                          tier: e.tier,
-                          difficulty: e.difficulty,
                           locked: e.locked,
                           cleared: _cleared(e),
                           imageAsset: 'assets/bossimg/boss${e.no}.png',
@@ -165,10 +163,10 @@ class _BossListScreenState extends State<BossListScreen> {
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('전설의 진상 도감',
+        Text('진상 도감',
             style: TextStyle(fontFamily: YbsType.display, fontSize: desktop ? YbsType.displaySize : 26, height: 1.15, color: YbsColor.white)),
         const SizedBox(height: 6),
-        const Text('전화로 만난 전설들. 격파하고 수집하세요.',
+        const Text('전화로 만난 진상들. 격파하고 수집하세요.',
             style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
       ],
     );
@@ -186,14 +184,14 @@ class _BossListScreenState extends State<BossListScreen> {
           textBaseline: TextBaseline.alphabetic,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('전설의 진상 도감',
+            const Text('진상 도감',
                 style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1.15, color: YbsColor.white)),
             Text(_clearedLabel,
                 style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
           ],
         ),
         const SizedBox(height: 6),
-        const Text('전화로 만난 전설들. 격파하고 수집하세요.', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
+        const Text('전화로 만난 진상들. 격파하고 수집하세요.', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
         const SizedBox(height: YbsSpace.s2 + 2),
         _progressBar(),
       ],
@@ -203,13 +201,11 @@ class _BossListScreenState extends State<BossListScreen> {
 }
 
 class _Entry {
-  const _Entry(this.no, this.id, this.name, this.title, this.tier, this.difficulty, this.locked, this.stubCaption);
+  const _Entry(this.no, this.id, this.name, this.title, this.locked, this.stubCaption);
   final int no;
   final String? id; // null = 비주얼 스텁
   final String name;
   final String title;
-  final BossTierUi tier;
-  final int difficulty;
   final bool locked;
   final String stubCaption; // 스텁 전용 (실보스는 progress에서 계산)
 }

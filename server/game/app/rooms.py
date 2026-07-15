@@ -460,7 +460,9 @@ class Room:
  "keyQuote": {{"speaker": "agent"|"claimant", "text": "실제 대사", "note": "왜 결정적이었는지"}}}}"""
 
     async def _record(self, verdict: dict) -> None:
-        """battle_rooms(승자·기세·판정) + battle_players(목표 달성) 기록."""
+        """battle_rooms(승자·기세·판정) + battle_players(목표 달성) 기록 +
+        참가자별 sessions(mode='battle') 기록 — 전적 화면·홈 통계가 sessions를
+        보므로 배틀도 여기에 남겨야 목록·승패에 잡힌다."""
         if not db.pool:
             return
         winner_uid = verdict.get("winnerUserId")
@@ -475,10 +477,19 @@ class Room:
             final_momentum,
             json.dumps(verdict, ensure_ascii=False),
         )
+        elapsed_s = self.t_ms() / 1000
         for uid, p in verdict["players"].items():
             await db.pool.execute(
                 "UPDATE battle_players SET goal_achieved=$3 WHERE room_id=$1 AND user_id=$2",
                 uuid.UUID(self.id), uuid.UUID(uid), p.get("goalAchieved"),
+            )
+            result = "win" if uid == winner_uid else ("draw" if winner_uid is None else "lose")
+            await db.pool.execute(
+                "INSERT INTO sessions"
+                " (user_id, mode, room_id, scenario_variables, started_at, ended_at, end_reason, result, score)"
+                " VALUES ($1,'battle',$2,'[]', now() - ($3 * interval '1 second'), now(), 'battle', $4, $5)",
+                uuid.UUID(uid), uuid.UUID(self.id), elapsed_s, result,
+                int(verdict["momentum"].get(uid, 50)),
             )
 
 

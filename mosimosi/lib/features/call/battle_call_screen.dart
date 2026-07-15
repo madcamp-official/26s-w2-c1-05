@@ -356,7 +356,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
             children: const [
               YbsBadge(label: 'LIVE', tone: BadgeTone.live, pulse: true),
               SizedBox(width: YbsSpace.s2),
-              YbsBadge(label: '전화 배틀', tone: BadgeTone.neutral),
+              YbsBadge(label: '실전 배틀', tone: BadgeTone.neutral),
             ],
           ),
           const SizedBox(height: YbsSpace.s2),

@@ -18,7 +18,7 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  int _filter = 0; // 0 전체 / 1 보스전 / 2 배틀
+  int _filter = 0; // 0 전체 / 1 AI 대전 / 2 배틀
 
   /// null = 로딩 중. _error와 함께 상태 구분.
   List<SessionRecord>? _sessions;
@@ -52,10 +52,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   String _title(SessionRecord s) {
-    if (s.mode == 'battle') return '전화 배틀';
+    if (s.mode == 'battle') return '실전 배틀';
     final boss =
         bossesSeed.where((b) => b.id == s.bossId).map((b) => b.name).firstOrNull;
-    return boss ?? s.bossId ?? '보스전';
+    return boss ?? s.bossId ?? 'AI 대전';
   }
 
   String _playedAt(SessionRecord s) {
@@ -83,7 +83,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const YbsHeader(title: '내 전적'),
+              const YbsHeader(title: '내 전적', trailing: SizedBox.shrink()),
               Padding(
                 padding: EdgeInsets.all(desktop ? YbsLayout.screenPadDesktop : YbsSpace.s5),
                 child: Column(
@@ -201,7 +201,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _filterChips() {
-    const labels = ['전체', '보스전', '배틀'];
+    const labels = ['전체', 'AI 대전', '실전 배틀'];
     return Row(children: [
       for (var i = 0; i < 3; i++)
         Padding(
@@ -252,7 +252,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: YbsType.sub, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                  Text('${s.mode == 'boss' ? '보스전' : '배틀'} · ${_playedAt(s)}',
+                  Text('${s.mode == 'boss' ? 'AI 대전' : '실전 배틀'} · ${_playedAt(s)}',
                       style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
                 ],
               ),

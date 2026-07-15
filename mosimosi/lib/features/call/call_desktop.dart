@@ -6,7 +6,7 @@ import '../battle/battle_room.dart';
 
 /// 배틀 통화 데스크톱 스테이지 (4b 데스크톱 — 좌측 5필드 HUD 상시 노출).
 /// 상단 기세 게이지 + 좌(목표·상황·물러설 수 없는 선·비밀) · 중앙 폰 · 우(코치·캡션 로그).
-/// 보스전은 CallDesktopStage를 직접 조립하므로, 이 헬퍼는 배틀 전용이다.
+/// AI 대전은 CallDesktopStage를 직접 조립하므로, 이 헬퍼는 배틀 전용이다.
 Widget buildCallDesktopStage({
   required Widget phone,
   required BattleMatch match,

@@ -73,11 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return '도전 ${p.attempts}회 · 미격파';
   }
 
-  String get _bossCardStat => _progress == null
-      ? '격파 –/8'
-      : _allCleared
-          ? '격파 $_clearedCount/8 · 올 클리어!'
-          : '격파 $_clearedCount/8 · 다음: No.${_nextBoss.number.toString().padLeft(3, '0')}';
+  String get _bossCardStat => '격파 ${_progress == null ? '–' : _clearedCount}/6';
 
   ({int wins, int losses}) get _battleRecord {
     final battles = (_sessions ?? const <SessionRecord>[])
@@ -89,9 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String get _battleStat {
-    if (_sessions == null) return '시즌 1 · –';
+    if (_sessions == null) return '–';
     final r = _battleRecord;
-    return '시즌 1 · ${r.wins}승 ${r.losses}패';
+    return '${r.wins}승 ${r.losses}패';
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -140,8 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('여보세요',
-                    style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.title, height: 1, color: YbsColor.white)),
+                Image.asset('assets/icon/applogo.png', height: 30, filterQuality: FilterQuality.medium),
                 Row(children: [
                   // 설정 진입 (디자인 데스크톱 헤더의 아바타를 모바일에도 사용)
                   GestureDetector(
@@ -205,13 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('보스전',
+                const Text('AI 대전',
                     style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1.15, color: YbsColor.textHero)),
-                Opacity(
-                  opacity: 0.85,
-                  child: Text('환',
-                      style: TextStyle(fontFamily: YbsType.display, fontSize: 36, height: 1, color: YbsColor.live500)),
-                ),
               ],
             ),
             const SizedBox(height: YbsSpace.s2),
@@ -221,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('격파 ${_progress == null ? '–' : _clearedCount}/8',
+                Text('격파 ${_progress == null ? '–' : _clearedCount}/6',
                     style: const TextStyle(fontFamily: YbsType.numeric, fontSize: YbsType.micro, fontWeight: FontWeight.w600, color: YbsColor.live400)),
                 const Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
               ],
@@ -254,22 +244,8 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('전화 배틀',
+                const Text('실전 배틀',
                     style: TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1.15, color: YbsColor.textHero)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: YbsColor.go600),
-                    borderRadius: BorderRadius.circular(YbsRadius.full),
-                  ),
-                  child: Text('1V1',
-                      style: TextStyle(
-                          fontFamily: YbsType.numeric,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: YbsType.labelTracking(11),
-                          color: YbsColor.go400)),
-                ),
               ],
             ),
             const SizedBox(height: YbsSpace.s2),
@@ -397,8 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('여보세요',
-                  style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1, color: YbsColor.white)),
+              Image.asset('assets/icon/applogo.png', height: 32, filterQuality: FilterQuality.medium),
               Row(children: [
                 GestureDetector(
                   onTap: () => context.push('/settings'),
@@ -454,32 +429,11 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (boss)
-              Opacity(
-                opacity: 0.9,
-                child: Text('환',
-                    style: TextStyle(fontFamily: YbsType.display, fontSize: 52, height: 1, color: accent)),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: YbsColor.go600),
-                  borderRadius: BorderRadius.circular(YbsRadius.full),
-                ),
-                child: Text('1V1 · 시즌 1',
-                    style: TextStyle(
-                        fontFamily: YbsType.numeric,
-                        fontSize: YbsType.micro,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: YbsType.labelTracking(YbsType.micro),
-                        color: YbsColor.go400)),
-              ),
             const Spacer(),
-            Text(boss ? '보스전' : '전화 배틀',
+            Text(boss ? 'AI 대전' : '실전 배틀',
                 style: const TextStyle(fontFamily: YbsType.display, fontSize: 38, height: 1.15, color: YbsColor.textHero)),
             const SizedBox(height: YbsSpace.s3),
-            Text(boss ? 'AI 보스에게 전화 걸기.\n전설의 진상 도감을 채우세요.' : '실시간 사람 대결.\n서로의 비밀을 건 협상 배틀.',
+            Text(boss ? 'AI 보스에게 전화 걸기.\n진상 도감을 채우세요.' : '실시간 사람 대결.\n서로의 비밀을 건 협상 배틀.',
                 style: const TextStyle(fontSize: 15, height: 1.55, color: YbsColor.textSub)),
             const SizedBox(height: YbsSpace.s2 + 2),
             Row(
@@ -523,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .map((b) => b.name)
               .firstOrNull
           : null;
-      final label = s.mode == 'boss' ? '보스전 · ${bossName ?? s.bossId ?? '?'}' : '배틀';
+      final label = s.mode == 'boss' ? 'AI 대전 · ${bossName ?? s.bossId ?? '?'}' : '실전 배틀';
       return Padding(
         padding: const EdgeInsets.only(bottom: YbsSpace.s3),
         child: Row(children: [
@@ -636,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('도감 진행', style: TextStyle(fontSize: 13, color: YbsColor.textSub)),
-                    Text(_progress == null ? '–/8' : '$_clearedCount/8',
+                    Text(_progress == null ? '–/6' : '$_clearedCount/6',
                         style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 13, fontWeight: FontWeight.w600, color: YbsColor.live400)),
                   ],
                 ),
@@ -652,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: _clearedCount / 8,
+                      widthFactor: _clearedCount / bossesSeed.length,
                       child: const ColoredBox(color: YbsColor.live500),
                     ),
                   ),

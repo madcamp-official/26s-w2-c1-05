@@ -16,7 +16,7 @@ Future<List<String>> generateScenarioVariables({
   required Boss boss,
 }) async {
   final prompt = '''
-전화 훈련 게임의 보스전에 리플레이성을 주는 상황 변수를 만들어라.
+전화 훈련 게임의 AI 대전에 리플레이성을 주는 상황 변수를 만들어라.
 보스: ${boss.name}
 시나리오: ${boss.scenario}
 

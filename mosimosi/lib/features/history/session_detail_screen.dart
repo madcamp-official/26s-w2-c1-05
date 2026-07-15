@@ -31,9 +31,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   String _title(SessionDetail d) {
-    if (d.mode == 'battle') return '전화 배틀';
+    if (d.mode == 'battle') return '실전 배틀';
     final boss = bossesSeed.where((b) => b.id == d.bossId).map((b) => b.name).firstOrNull;
-    return boss ?? d.bossId ?? '보스전';
+    return boss ?? d.bossId ?? 'AI 대전';
   }
 
   String _playedAt(SessionDetail d) {
@@ -210,7 +210,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: YbsType.bodyMd, fontWeight: FontWeight.w700, color: YbsColor.textHero)),
-                Text('${d.mode == 'boss' ? '보스전' : '배틀'} · ${_playedAt(d)}',
+                Text('${d.mode == 'boss' ? 'AI 대전' : '실전 배틀'} · ${_playedAt(d)}',
                     style: const TextStyle(fontSize: YbsType.micro, color: YbsColor.textFaint)),
               ],
             ),

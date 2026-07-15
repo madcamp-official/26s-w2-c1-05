@@ -61,6 +61,9 @@ _EMOTION_INSTRUCTION = {
 
 # ---- Qwen3-TTS (vLLM-Omni) 우선 경로 ----
 _QWEN_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+# 전 보스 공통 속도 배수 — 보스들이 전반적으로 더 빨리 말하도록 기본 속도를 올린다.
+# 화자별 상대 속도(_QWEN_VOICE_MAP.speed)는 유지하면서 전체만 가속.
+_SPEED_MULT = 1.15
 # Chirp3 보이스명 → Qwen 화자/속도/감정지시. 청취 테스트로 확정한 배정
 # (uncle_fu=치킨집 사장님, vivian=치과 접수원, sohee=환불 상담원).
 _QWEN_VOICE_MAP = {
@@ -72,9 +75,9 @@ _QWEN_VOICE_MAP = {
     },
     "ko-KR-Chirp3-HD-Kore": {
         "voice": "vivian",
-        "speed": 1.3,
+        "speed": 1.1,
         "seed": 42,
-        "instructions": "40대 한국 여성, 사무적으로 말하다가 순간 짜증이 확 묻어나는, 감정 기복이 있는 빠른 말투, 발음이 뭉개질 정도로 빠름",
+        "instructions": "40대 한국 여성, 유능하고 프로다운 사무적인 말투, 빠르지만 또박또박 명료하게, 무례하지 않게",
     },
     "ko-KR-Chirp3-HD-Aoede": {
         "voice": "sohee",
@@ -120,7 +123,7 @@ async def _synthesize_qwen(req: TtsRequest) -> bytes | None:
         "model": _QWEN_MODEL,
         "input": req.text,
         "voice": cfg["voice"],
-        "speed": cfg["speed"],
+        "speed": round(cfg["speed"] * _SPEED_MULT, 2),
         "seed": cfg["seed"],
         "instructions": instructions,
         "language": "Korean",
@@ -163,7 +166,7 @@ async def synthesize(req: TtsRequest):
 
     audio_config: dict = {"audioEncoding": "MP3"}
     if req.pace is not None:
-        audio_config["speakingRate"] = req.pace
+        audio_config["speakingRate"] = round(req.pace * _SPEED_MULT, 2)
     if req.pitch is not None and "Chirp3-HD" not in req.voice_name:
         audio_config["pitch"] = req.pitch
 

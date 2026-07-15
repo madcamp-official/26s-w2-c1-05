@@ -47,31 +47,18 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
 
   void _startMatching() => context.push('/battle/matching');
 
-  // ---- 파생 값 ----
-  int get _wins => (_data?['wins'] as num?)?.toInt() ?? 0;
-  int get _losses => (_data?['losses'] as num?)?.toInt() ?? 0;
-  int get _streak => (_data?['streak'] as num?)?.toInt() ?? 0;
-
-  String get _seasonLine {
-    final total = _wins + _losses;
-    final rate = total == 0 ? null : (_wins / total * 100).round();
-    return '시즌 1 · $_wins승 $_losses패${rate == null ? '' : ' · 승률 $rate%'}';
-  }
-
   @override
   Widget build(BuildContext context) {
     if (isDesktop(context)) return _desktop(context);
     return SafeArea(
       child: Column(
         children: [
-          const YbsHeader(title: '전화 배틀'),
+          const YbsHeader(title: '실전 배틀', trailing: SizedBox.shrink()),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                   YbsSpace.s5, 0, YbsSpace.s5, YbsSpace.s3),
               children: [
-                _profileCard(),
-                const SizedBox(height: YbsSpace.s5),
                 _recentSection(),
               ],
             ),
@@ -101,8 +88,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _profileCard(),
-                  const SizedBox(height: 24),
                   Expanded(child: SingleChildScrollView(child: _recentSection())),
                 ],
               ),
@@ -133,7 +118,7 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('전화 배틀',
+          const Text('실전 배틀',
               style: TextStyle(
                   fontFamily: YbsType.display,
                   fontSize: 40,
@@ -166,117 +151,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
     );
   }
 
-  // ================================================================ 프로필 카드
-  Widget _profileCard() {
-    final nickname = LocalStore.instance.nickname ?? '나';
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: YbsColor.surfaceCard,
-        gradient: RadialGradient(
-          center: const Alignment(0, -1),
-          radius: 1.2,
-          colors: [
-            YbsColor.go500.withValues(alpha: 0.12),
-            YbsColor.surfaceCard,
-          ],
-        ),
-        border: Border.all(color: YbsColor.borderSoft),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YbsColor.surfaceInset,
-                  border: Border.all(color: YbsColor.go600, width: 2),
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.24),
-                    radius: 0.72,
-                    colors: [
-                      YbsColor.go500.withValues(alpha: 0.25),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(nickname.characters.first,
-                    style: const TextStyle(
-                        fontFamily: YbsType.display,
-                        fontSize: 24,
-                        height: 1,
-                        color: YbsColor.go400)),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(nickname,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: YbsColor.textHero)),
-                    const SizedBox(height: 2),
-                    Text(_loading ? '전적 불러오는 중…' : _seasonLine,
-                        style: const TextStyle(
-                            fontSize: 12, color: YbsColor.textSub)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _statTile('$_streak', '연승 중',
-                  valueColor: _streak > 0 ? YbsColor.go400 : YbsColor.textHero),
-              const SizedBox(width: 10),
-              _statTile('$_wins', '승', valueColor: YbsColor.go400),
-              const SizedBox(width: 10),
-              _statTile('$_losses', '패', valueColor: YbsColor.live400),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statTile(String value, String label,
-      {Color valueColor = YbsColor.textHero}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          color: YbsColor.surfaceInset,
-          border: Border.all(color: YbsColor.borderSoft),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: TextStyle(
-                    fontFamily: YbsType.numeric,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    height: 1.1,
-                    color: valueColor)),
-            const SizedBox(height: 2),
-            Text(label,
-                style:
-                    const TextStyle(fontSize: 11, color: YbsColor.textSub)),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ================================================================ 최근 배틀
   Widget _recentSection() {

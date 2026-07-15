@@ -12,7 +12,7 @@ import '../../services/player_records.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
-/// 2.4 결과 + 리포트 (보스전) — 디자인 I 섹션 이식.
+/// 2.4 결과 + 리포트 (AI 대전) — 디자인 I 섹션 이식.
 /// 탭A 판정(VerdictBanner+ScoreRing+조건 O/X) / 탭B 리포트(스탯·이렇게 말했다면·하이라이트).
 /// 최종 심판(Gemini) 실데이터 사용. 침묵 타임라인·전달 체크는 데이터 없음 → 미표시.
 /// 심판 완료 시 서버에 판 종료 보고(트랜스크립트+심판, Phase 2 §4) — best-effort,

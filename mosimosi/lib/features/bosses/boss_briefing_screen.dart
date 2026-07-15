@@ -16,13 +16,6 @@ class BossBriefingScreen extends StatelessWidget {
 
   static const _bestScores = {'chicken': '92점', 'dental': '81점', 'refund': '87점'}; // 목
 
-  (Color, Color) _tierColors(Boss boss) => switch (boss.tier) {
-        BossTier.normal => (YbsColor.ink300, YbsColor.ink300.withValues(alpha: 0.22)),
-        BossTier.rare => (YbsColor.sky400, YbsColor.sky400.withValues(alpha: 0.22)),
-        BossTier.boss => (YbsColor.live500, YbsColor.live500.withValues(alpha: 0.22)),
-        BossTier.legend => (YbsColor.gold400, YbsColor.gold400.withValues(alpha: 0.22)),
-      };
-
   @override
   Widget build(BuildContext context) {
     final boss = bossById(bossId);
@@ -92,7 +85,6 @@ class BossBriefingScreen extends StatelessWidget {
 
   // ================================================================ desktop (중앙 760px)
   Widget _desktop(BuildContext context, Boss boss) {
-    final (tierColor, tierSpot) = _tierColors(boss);
     return Center(
       child: SizedBox(
         width: 760,
@@ -101,7 +93,7 @@ class BossBriefingScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(children: [
-              _portrait(boss, size: 96, syllableSize: 42, tierColor: tierColor, tierSpot: tierSpot),
+              _portrait(boss, size: 96, syllableSize: 42),
               const SizedBox(width: YbsSpace.s5),
               Expanded(
                 child: Column(
@@ -112,11 +104,7 @@ class BossBriefingScreen extends StatelessWidget {
                     Text(boss.name,
                         style: const TextStyle(fontFamily: YbsType.display, fontSize: YbsType.displaySize, height: 1.15, color: YbsColor.textHero)),
                     const SizedBox(height: 6),
-                    Row(children: [
-                      Text('「${boss.quote}」', style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
-                      const SizedBox(width: YbsSpace.s3),
-                      DifficultyMeter(level: boss.difficultyLevel),
-                    ]),
+                    Text('「${boss.quote}」', style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
                   ],
                 ),
               ),
@@ -162,8 +150,7 @@ class BossBriefingScreen extends StatelessWidget {
 
   // ================================================================ pieces
   Widget _missionLabel(Boss boss) {
-    final suffix = boss.tier == BossTier.legend ? ' · 최종 보스' : '';
-    return Text('MISSION No.${boss.number.toString().padLeft(3, '0')}$suffix',
+    return Text('MISSION No.${boss.number.toString().padLeft(3, '0')}',
         style: TextStyle(
             fontFamily: YbsType.numeric,
             fontSize: 11,
@@ -173,37 +160,21 @@ class BossBriefingScreen extends StatelessWidget {
   }
 
   Widget _portraitBlock(Boss boss, {required bool center}) {
-    final (tierColor, tierSpot) = _tierColors(boss);
     return Column(
       children: [
-        _portrait(boss, size: 96, syllableSize: 42, tierColor: tierColor, tierSpot: tierSpot),
+        _portrait(boss, size: 96, syllableSize: 42),
         const SizedBox(height: YbsSpace.s2 + 2),
         Text(boss.name,
             textAlign: TextAlign.center,
             style: const TextStyle(fontFamily: YbsType.display, fontSize: 28, height: 1.2, color: YbsColor.textHero)),
         const SizedBox(height: 4),
         Text('「${boss.quote}」', style: const TextStyle(fontSize: YbsType.sub, color: YbsColor.textSub)),
-        const SizedBox(height: YbsSpace.s2 + 2),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DifficultyMeter(level: boss.difficultyLevel),
-            const SizedBox(width: YbsSpace.s2 + 2),
-            if (boss.tier == BossTier.legend)
-              const YbsBadge(label: '전설', tone: BadgeTone.gold)
-            else if (boss.tier == BossTier.boss)
-              const YbsBadge(label: '보스', tone: BadgeTone.live)
-            else if (boss.tier == BossTier.rare)
-              Text('희귀', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro), color: tierColor))
-            else
-              Text('일반', style: TextStyle(fontSize: YbsType.micro, fontWeight: FontWeight.w700, letterSpacing: YbsType.labelTracking(YbsType.micro), color: tierColor)),
-          ],
-        ),
       ],
     );
   }
 
-  Widget _portrait(Boss boss, {required double size, required double syllableSize, required Color tierColor, required Color tierSpot}) {
+  Widget _portrait(Boss boss, {required double size, required double syllableSize}) {
+    const accent = YbsColor.sky400;
     return Container(
       width: size,
       height: size,
@@ -211,14 +182,14 @@ class BossBriefingScreen extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: YbsColor.surfaceInset,
-        gradient: RadialGradient(center: const Alignment(0, -0.24), radius: 0.72, colors: [tierSpot, Colors.transparent]),
-        border: Border.all(color: tierColor.withValues(alpha: 0.8), width: 2),
-        boxShadow: [BoxShadow(color: tierColor.withValues(alpha: 0.35), blurRadius: 28)],
+        gradient: RadialGradient(center: const Alignment(0, -0.24), radius: 0.72, colors: [accent.withValues(alpha: 0.22), Colors.transparent]),
+        border: Border.all(color: accent.withValues(alpha: 0.8), width: 2),
+        boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 28)],
       ),
       alignment: Alignment.center,
       child: bossPortraitImage(boss.portraitImage,
           fallback: Text(boss.portraitSyllable,
-              style: TextStyle(fontFamily: YbsType.display, fontSize: syllableSize, height: 1, color: tierColor))),
+              style: TextStyle(fontFamily: YbsType.display, fontSize: syllableSize, height: 1, color: accent))),
     );
   }
 

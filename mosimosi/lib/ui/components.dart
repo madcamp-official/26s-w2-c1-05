@@ -138,49 +138,13 @@ class YbsButton extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────── DifficultyMeter (boss/DifficultyMeter.jsx)
-class DifficultyMeter extends StatelessWidget {
-  const DifficultyMeter({super.key, required this.level, this.max = 5, this.size = 12});
-
-  final int level;
-  final int max;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = level >= 5
-        ? YbsColor.gold400
-        : level >= 4
-            ? YbsColor.live500
-            : YbsColor.amber400;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < max; i++)
-          Padding(
-            padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
-            child: Icon(
-              i < level ? Icons.star : Icons.star_border,
-              size: size + 2,
-              color: i < level ? color : YbsColor.ink500,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────── BossCard (boss/BossCard.jsx)
-enum BossTierUi { normal, rare, boss, legend }
-
 class BossCardUi extends StatelessWidget {
   const BossCardUi({
     super.key,
     required this.number,
     required this.name,
     required this.title,
-    required this.tier,
-    required this.difficulty,
     this.locked = false,
     this.cleared = false,
     this.onTap,
@@ -190,23 +154,17 @@ class BossCardUi extends StatelessWidget {
   final int number;
   final String name;
   final String title;
-  final BossTierUi tier;
-  final int difficulty;
   final bool locked;
   final bool cleared;
   final VoidCallback? onTap;
   final String? imageAsset; // 보스 프로필 이미지 — null이면 글자 초상
 
-  (String, Color, Color) get _tier => switch (tier) {
-        BossTierUi.normal => ('일반', YbsColor.ink300, YbsColor.ink300.withValues(alpha: 0.16)),
-        BossTierUi.rare => ('희귀', YbsColor.sky400, YbsColor.sky400.withValues(alpha: 0.20)),
-        BossTierUi.boss => ('보스', YbsColor.live500, YbsColor.live500.withValues(alpha: 0.22)),
-        BossTierUi.legend => ('전설', YbsColor.gold400, YbsColor.gold400.withValues(alpha: 0.22)),
-      };
-
   @override
   Widget build(BuildContext context) {
-    final (tierLabel, tierColor, tierSpot) = _tier;
+    const accent = YbsColor.sky400;
+    const accentSpot = Color(0x335BC8FF); // sky400 alpha≈0.20
+    final tierColor = accent;
+    final tierSpot = accentSpot;
     final syllable = locked ? null : (name.isEmpty ? '?' : name.characters.first);
     return GestureDetector(
       onTap: locked ? null : onTap,
@@ -218,9 +176,7 @@ class BossCardUi extends StatelessWidget {
             color: YbsColor.surfaceCard,
             border: Border.all(color: YbsColor.borderSoft),
             borderRadius: BorderRadius.circular(YbsRadius.lg),
-            boxShadow: tier == BossTierUi.legend && !locked
-                ? [BoxShadow(color: YbsColor.goldGlow, blurRadius: 28), BoxShadow(color: YbsColor.gold500, blurRadius: 0, spreadRadius: 1)]
-                : YbsShadow.card,
+            boxShadow: YbsShadow.card,
           ),
           child: Stack(
             children: [
@@ -270,19 +226,6 @@ class BossCardUi extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11.5, color: YbsColor.textSub)),
-                        const SizedBox(height: YbsSpace.s2),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            DifficultyMeter(level: difficulty, size: 11),
-                            Text(tierLabel,
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: YbsType.labelTracking(10),
-                                    color: locked ? YbsColor.textFaint : tierColor)),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -560,7 +503,7 @@ class HighlightCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('여보세요', style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.sub, color: YbsColor.textSub)),
+                Image.asset('assets/icon/applogo.png', height: 18, filterQuality: FilterQuality.medium),
                 Row(children: [
                   if (bossName != null)
                     Text('vs $bossName  ', style: const TextStyle(fontFamily: YbsType.numeric, fontSize: 11, color: YbsColor.textFaint)),

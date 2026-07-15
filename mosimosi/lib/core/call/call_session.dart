@@ -273,14 +273,15 @@ class CallSessionController extends ChangeNotifier {
     var bossText = '';
     transcript.add(Utterance(speaker: 'boss', text: '', tStartMs: tStart));
     try {
-      await for (final delta in llm.chatStream(_buildMessages(seedUser))) {
+      await for (final delta
+          in llm.chatStream(_buildMessages(seedUser), temperature: boss.llmTemperature)) {
         if (_ended) return;
         // 선행 [감정] 태그를 떼어낸 실제 대사만 자막·TTS로 흘린다.
         final clean = _consumeEmotionTag(delta);
         if (clean.isEmpty) continue;
         bossText += clean;
-        transcript[transcript.length - 1] =
-            Utterance(speaker: 'boss', text: bossText, tStartMs: tStart);
+        transcript[transcript.length - 1] = Utterance(
+            speaker: 'boss', text: _stripEndMarkers(bossText), tStartMs: tStart);
         _feedTts(clean);
         notifyListeners();
       }
@@ -350,7 +351,18 @@ class CallSessionController extends ChangeNotifier {
         return out;
       }
       final close = _tagBuf.indexOf(']');
-      if (close < 0) return ''; // 닫는 대괄호 대기
+      if (close < 0) {
+        // 닫는 ']'가 곧 오지 않으면 감정 태그가 아니라고 보고 그대로 통과시킨다.
+        // (전각 브라켓 【】·미종결·중국어 코드스위칭 등에서 턴이 통째로 사라지던 버그 방어.
+        //  유효 태그는 [통화종료]=6자 이내라 8자를 넘기면 태그일 수 없다.)
+        if (trimmed.length > 8) {
+          _tagResolved = true;
+          final out = _tagBuf;
+          _tagBuf = '';
+          return out;
+        }
+        return ''; // 아직 짧음 — 닫는 대괄호 조금 더 대기
+      }
       final open = _tagBuf.indexOf('[');
       final tag = _tagBuf.substring(open + 1, close).trim();
       if (_emotions.contains(tag)) {
@@ -363,8 +375,24 @@ class CallSessionController extends ChangeNotifier {
   }
 
   // ================================================================ TTS 큐
+  /// 대사 어디에 있든 통화 종료 마커([끝]/[통화종료]/[END])를 떼어내고, 하나라도
+  /// 있으면 종료 플래그를 세운다. 선두 태그(_consumeEmotionTag)로 안 걸리는
+  /// 마무리 대사 끝(가장 흔함)의 마커까지 잡아 TTS로 새어나가지 않게 한다.
+  String _stripEndMarkers(String s) {
+    var out = s;
+    for (final tag in _endTags) {
+      final m = '[$tag]';
+      if (out.contains(m)) {
+        out = out.replaceAll(m, '');
+        _bossHangUpPending = true;
+      }
+    }
+    return out;
+  }
+
   void _feedTts(String delta) {
     _pendingTts += delta;
+    _pendingTts = _stripEndMarkers(_pendingTts); // 누적본에서 마커 제거(델타 경계 분할 방어)
     while (true) {
       final m = _sentenceEnd.firstMatch(_pendingTts);
       if (m == null) break;

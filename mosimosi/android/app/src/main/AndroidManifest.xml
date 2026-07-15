@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="mosimosi"
+        android:label="여보세요"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

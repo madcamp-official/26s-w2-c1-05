@@ -7,10 +7,8 @@ final List<Boss> bossesSeed = [
     id: 'chicken',
     number: 1,
     name: '치킨집 사장님',
-    subtitle: '입문 보스 · 배달 주문 · 제한 시간 03:00',
+    subtitle: '배달 주문 · 제한 시간 03:00',
     quote: '네~ 천천히 말씀하세요.',
-    tier: BossTier.normal,
-    difficultyLevel: 1,
     portraitSyllable: '치',
     scenario: '저녁으로 치킨을 배달 주문하세요. 메뉴와 배달 주소를 빠짐없이 전달하면 클리어.',
     personaPrompt: '''
@@ -63,18 +61,16 @@ final List<Boss> bossesSeed = [
     id: 'dental',
     number: 2,
     name: '치과 접수원',
-    subtitle: '중급 보스 · 진료 예약 · 제한 시간 03:00',
-    quote: '3초에 한 문장, 숨 쉴 틈 없음.',
-    tier: BossTier.rare,
-    difficultyLevel: 3,
+    subtitle: '진료 예약 · 제한 시간 03:00',
+    quote: '네, 어떤 진료로 예약 도와드릴까요?',
     portraitSyllable: '따',
     scenario: '충치 진료 예약을 잡으세요. 시술이 아닌 진료임을 밝히고, 가능한 시간에 예약을 확정하면 클리어.',
     personaPrompt: '''
-너는 '따발총 치과 접수원'이다. 전화로 진료 예약을 받고 있다.
-성격: 40대 여성. 유능하지만 오늘 업무가 많아 살짝 짜증이 나 있다. 말이 빠르고 사무적이다.
-말투: 빠르고 간결한 존댓말. "성함이요?", "보험은요?"처럼 짧게 끊어 말한다.
-역할: 예약을 잡아 주되, 증상·초진 여부·원하는 시간대를 속사포처럼 묻는다.
-대화 중 은연중에 업무가 많음을 흘려라 ("아우 오늘 대기가 많아서…").
+너는 '노련한 치과 접수원'이다. 전화로 진료 예약을 받고 있다.
+성격: 40대 여성. 유능하고 프로답다. 오늘 예약이 많아 바쁘지만 짜증을 내진 않는다 — 불친절하지도, 살갑지도 않게 사무적으로 응대한다.
+말투: 간결하고 효율적인 존댓말. 군더더기 없이 핵심만 빠르게 묻는다. "성함이 어떻게 되세요?", "초진이세요?"처럼 짧고 명료하게. 무례하게 쏘아붙이지는 마라.
+역할: 예약을 잡아 주되, 증상·초진 여부·원하는 시간대를 효율적으로 확인한다.
+바쁜 티는 은근히만 낸다 ("오늘 예약이 좀 많네요").
 
 [통화 시작 규칙]
 - 네 첫 대사는 반드시 아래 문장으로 시작한다 (토씨 하나 바꾸지 마라):
@@ -90,20 +86,21 @@ final List<Boss> bossesSeed = [
   손님이 고르는데 다시 안 된다고 거절하는 것은 절대 금지다. (그 시간은 여전히 '가능'이다.)
 
 [감정 지도]
-- 기본은 [평온] (사무적인 비즈니스 상냥함).
-- 손님이 머뭇거리거나 같은 걸 되물으면 [짜증]으로 전환: "여보세요? 듣고 계세요?"
-- 시술(임플란트·스케일링)이 아니라 충치 진료 예약임을 알면 [짜증]으로 태도가 살짝 나빠진다.
+- 기본은 [평온] (사무적이고 담백하게). 평소엔 짜증 내지 마라.
+- 손님이 같은 걸 여러 번 되묻거나 무리한 요구를 반복할 때만 그제서야 살짝 [짜증]. 그마저도 짧게, 무례하지 않게.
 
 [예시]
 손님: 충치 때문에 진료 예약하려고요.
-접수원: [짜증] 아, 시술이 아니고 진료요? …네, 언제가 편하세요? 아우 오늘 대기가 많아서.
+접수원: [평온] 네, 진료 예약이시죠. 언제가 편하세요? 오늘 예약이 좀 많아서요.
 손님: 오후 3시 어때요?
-접수원: [짜증] 세시는 꽉 찼어요. 두시나 네시 반은 되는데요.
+접수원: [평온] 세시는 마감됐고요, 두시나 네시 반은 가능합니다.
 손님: 그럼 네시 반으로 할게요.
-접수원: [평온] 네, 네시 반이요. 성함이랑 생년월일 먼저요.''',
+접수원: [평온] 네, 네시 반으로 잡아드릴게요. 성함이랑 생년월일 알려주시겠어요?''',
     clearConditions: ['시술이 아닌 충치 진료임을 명확히 전달', '가능한 시간에 예약 확정', '빠른 질문 2개 이상 침착하게 응답'],
     timeLimit: Duration(minutes: 3),
-    difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 3, surpriseFreq: 5, interrupts: false),
+    difficulty: DifficultyParams(maxSentences: 2, cooperativeness: 3, surpriseFreq: 3, interrupts: false),
+    // 중국어 코드스위칭이 유독 잦아 온도를 더 낮춰 억제한다.
+    llmTemperature: 0.4,
     // 사용자가 직접 청취 없이 Claude 추천을 채택(2026-07-14). voiceName만 바꾸면
     // 즉시 교체 가능 — 8종: Charon/Puck/Fenrir/Orus(남) · Aoede/Kore/Leda/Zephyr(여).
     voicePreset: TtsVoicePreset(voiceName: 'ko-KR-Chirp3-HD-Kore', pace: 1.15),
@@ -126,10 +123,8 @@ final List<Boss> bossesSeed = [
     id: 'alba',
     number: 3,
     name: '사장님',
-    subtitle: '심화 보스 · 알바비 협상 · 제한 시간 03:00',
+    subtitle: '알바비 협상 · 제한 시간 03:00',
     quote: '우리 알바 고생 많이한 건 아는데, 가게 사정도 있고 해서 살짝 무리일 것 같은데?',
-    tier: BossTier.rare,
-    difficultyLevel: 3,
     portraitSyllable: '미',
     scenario: '1년 넘게 일한 알바비 인상을 요구하세요. 사장님은 위하는 척하며 말을 돌립니다. 근거로 회피를 돌파하고 확답을 받으면 클리어.',
     personaPrompt: '''
@@ -185,10 +180,8 @@ final List<Boss> bossesSeed = [
     id: 'prof_grade',
     number: 4,
     name: '교수님',
-    subtitle: '심화 보스 · 성적 이의제기 · 제한 시간 03:00',
+    subtitle: '성적 이의제기 · 제한 시간 03:00',
     quote: '나는 성적대로 잘 줬다고 생각하는데, 학생은 왜 낮다고 생각하는 거죠?',
-    tier: BossTier.rare,
-    difficultyLevel: 4,
     portraitSyllable: '출',
     scenario: 'B를 받은 성적에 이의를 제기하세요. 교수님의 반박(출결 문제)을 논리로 바로잡아 출결 정정 약속을 받으면 클리어.',
     personaPrompt: '''
@@ -244,10 +237,8 @@ final List<Boss> bossesSeed = [
     id: 'prof_gradschool',
     number: 5,
     name: '교수님',
-    subtitle: '고비 보스 · 대학원 제안 거절 · 제한 시간 03:00',
+    subtitle: '대학원 제안 거절 · 제한 시간 03:00',
     quote: '나는 이렇게 실력 좋은 학생을 처음 봤어요. 우리 연구실 와볼 생각 없어요?',
-    tier: BossTier.boss,
-    difficultyLevel: 4,
     portraitSyllable: '칭',
     scenario: '성적 우수를 본 교수님이 대학원 영입을 제안합니다. 관계를 망치지 않으면서 명확히 거절하면 클리어.',
     personaPrompt: '''
@@ -302,10 +293,8 @@ final List<Boss> bossesSeed = [
     id: 'refund',
     number: 6,
     name: '고객센터',
-    subtitle: '최종 보스 · 급배송 고객센터 · 제한 시간 03:00',
+    subtitle: '급배송 고객센터 · 제한 시간 03:00',
     quote: '환불은 안 됩니다. 규정이에요.',
-    tier: BossTier.legend,
-    difficultyLevel: 5,
     portraitSyllable: '환',
     scenario: '개봉했다고 거절당한 상품의 환불을 받아내세요. 감정이 아니라 구체적 근거로 상담원을 설득하면 클리어.',
     personaPrompt: '''

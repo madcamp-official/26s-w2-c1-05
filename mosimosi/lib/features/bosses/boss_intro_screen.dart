@@ -10,9 +10,9 @@ import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
-/// 2a. 인트로 씬 — 메신저 스토리 (보스전 도입, 디자인 IntroScene).
+/// 2a. 인트로 씬 — 메신저 스토리 (AI 대전 도입, 디자인 IntroScene).
 /// 메시지가 순차 재생되고(친구 메시지 앞엔 타이핑 표시), 마지막에
-/// INCOMING BOSS 구분선 + 고객센터 번호 + 발신 버튼으로 보스전 진입.
+/// INCOMING BOSS 구분선 + 고객센터 번호 + 발신 버튼으로 AI 대전 진입.
 /// 데스크톱은 인콜과 동일한 폰 스테이지(중앙 390px 프레임) 처리.
 class BossIntroScreen extends StatefulWidget {
   const BossIntroScreen({super.key, required this.bossId});
@@ -748,7 +748,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
             ),
           ),
           const SizedBox(height: 10),
-          Text('연결되면 보스전이 시작돼요 · 제한 시간 ${_limit(_boss!)}',
+          Text('연결되면 AI 대전이 시작돼요 · 제한 시간 ${_limit(_boss!)}',
               style:
                   const TextStyle(fontSize: 11.5, color: YbsColor.textFaint)),
         ],

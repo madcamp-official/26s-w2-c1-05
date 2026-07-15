@@ -367,7 +367,7 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
 
   /// 한쪽(나/상대)의 공개 카드 — 목표·선(지켜냄/넘음)·비밀(들킴/안들킴).
   Widget _revealCard(Map<String, dynamic> p, {required bool mine, required bool won, required bool draw}) {
-    final label = p['label'] as String? ?? (mine ? '나' : '상대');
+    final label = p['label'] as String? ?? '';
     final goal = p['goal'] as String? ?? '';
     final hardLine = p['hardLine'] as String? ?? '';
     final secret = p['secret'] as String? ?? '';
@@ -375,7 +375,11 @@ class _BattleResultScreenState extends State<BattleResultScreen> {
     final exposed = p['secretExposed'] as bool?;
     final accent = mine ? YbsColor.go400 : YbsColor.live400;
     final border = mine ? YbsColor.go600 : YbsColor.live600;
-    final title = mine ? '나 · $label' : '상대 · $label';
+    // 실제 닉네임 우선 (서버 verdict.players[uid].nickname). 역할 슬롯(agent/claimant)이
+    // 새어나오지 않도록 nickname → 없으면 '나'/상대 닉으로 폴백.
+    final nick = (p['nickname'] as String?)?.trim();
+    final who = (nick != null && nick.isNotEmpty) ? nick : (mine ? '나' : _room!.match.opponentNickname);
+    final title = label.isEmpty ? who : '$who · $label';
     final tag = draw ? 'DRAW' : (won ? 'WIN' : 'LOSE');
     return _card(
       border: border,
