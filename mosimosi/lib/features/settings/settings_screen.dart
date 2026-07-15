@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/local_store.dart';
 import '../../services/game_server_client.dart';
+import '../../ui/breakpoints.dart';
 import '../../ui/theme.dart';
 
 /// 6. 설정 — 프로필(닉네임 변경)·계정(로그아웃/탈퇴)/마이크 테스트/음성 설정/
@@ -179,6 +180,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) context.go('/onboarding');
   }
 
+  /// 데모 관전 — 진행 중인 가장 최근 배틀 방을 자동으로 관전 (데스크톱 전용).
+  Future<void> _watchLatestBattle() async {
+    String? roomId;
+    try {
+      final res = await GameServerClient().getJson('/battles/live/latest');
+      roomId = res['roomId'] as String?;
+    } catch (_) {
+      roomId = null;
+    }
+    if (!mounted) return;
+    if (roomId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('지금 진행 중인 배틀이 없어요')));
+      return;
+    }
+    context.push('/battle/$roomId/watch');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -314,6 +333,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ]),
             _section('개발자'),
             _card([
+              // 관전(데모 프로젝터) — 데스크톱 전용. 진행 중인 최근 배틀을 자동 관전.
+              if (isDesktop(context)) ...[
+                _row(
+                  icon: Icons.visibility_outlined,
+                  title: '배틀 관전 (데모)',
+                  onTap: _watchLatestBattle,
+                  trailing: const Icon(Icons.chevron_right, size: 18, color: YbsColor.textFaint),
+                ),
+                const Divider(height: 1, color: YbsColor.borderSoft),
+              ],
               _row(
                 icon: Icons.science_outlined,
                 title: 'Day 1 스파이크',

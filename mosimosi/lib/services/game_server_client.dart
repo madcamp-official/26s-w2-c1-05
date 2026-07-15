@@ -105,4 +105,11 @@ class GameServerClient {
         Uri(queryParameters: {'token': LocalStore.instance.token ?? ''}).query;
     return connectWebSocket('/ws/room/$roomId?$q');
   }
+
+  /// 관전(읽기 전용) — /ws/watch/{roomId}. watch_init 스냅샷 후 state/utterance/judge 수신.
+  WebSocketChannel connectWatchSocket({required String roomId}) {
+    final q =
+        Uri(queryParameters: {'token': LocalStore.instance.token ?? ''}).query;
+    return connectWebSocket('/ws/watch/$roomId?$q');
+  }
 }

@@ -78,6 +78,7 @@ class Room:
         self.state = "matched"
         self.players = players  # user_id -> {role, form_factor, nickname, secret_goal, rule_card}
         self.sockets: dict[str, WebSocket] = {}
+        self.spectators: list[WebSocket] = []  # 관전자(읽기 전용) — 비밀 제외 브로드캐스트만
         self.ready: set[str] = set()
         self.started_at: float | None = None  # in_call 진입 (t_start_ms 기준점)
         self.time_limit_s = 300
@@ -95,11 +96,51 @@ class Room:
         return 0 if self.started_at is None else int((time.monotonic() - self.started_at) * 1000)
 
     async def broadcast(self, msg: dict) -> None:
-        for ws in list(self.sockets.values()):
+        # state·utterance·verdict는 당사자·관전자 모두에게 (비밀 없는 공개 이벤트).
+        payload = json.dumps(msg, ensure_ascii=False)
+        for ws in list(self.sockets.values()) + list(self.spectators):
             try:
-                await ws.send_text(json.dumps(msg, ensure_ascii=False))
+                await ws.send_text(payload)
             except Exception:
                 pass
+
+    async def send_spectators(self, msg: dict) -> None:
+        payload = json.dumps(msg, ensure_ascii=False)
+        for ws in list(self.spectators):
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                pass
+
+    def spectator_snapshot(self) -> dict:
+        """관전 접속 즉시 현재 상태 스냅샷 (중간 진입 대응).
+        데모 관전은 '감독 시점' — 양측 비밀 목표·규칙 카드를 모두 노출한다
+        (당사자끼리는 서로 못 보지만 관전 프로젝터에는 다 보이는 게 의도)."""
+        return {
+            "type": "watch_init",
+            "state": self.state,
+            "startedAtMs": self.t_ms(),
+            "momentum": {
+                self.players[uid]["role"]: (
+                    self.momentum_agent if self.players[uid]["role"] == "agent"
+                    else 100 - self.momentum_agent)
+                for uid in self.players
+            },
+            "players": {
+                p["role"]: {
+                    "nickname": p["nickname"],
+                    "formFactor": p["form_factor"],
+                    "secretGoal": p["secret_goal"],
+                    "ruleCard": p["rule_card"],
+                }
+                for p in self.players.values()
+            },
+            # 지금까지의 발화 (role 표기만 — user_id·비밀 노출 안 함)
+            "utterances": [
+                {"role": u["role"], "text": u["text"], "tStartMs": u["t_start_ms"]}
+                for u in self.utterances
+            ],
+        }
 
     async def relay_audio(self, from_user_id: str, data: bytes) -> None:
         """오디오 프레임 pass-through — 저장·가공 없이 상대에게만 즉시 전달 (Phase 2)."""
@@ -206,6 +247,14 @@ class Room:
                 }, ensure_ascii=False))
             except Exception:
                 pass
+        # 관전자: 힌트 제외, 기세만 (agent 관점 기준값 — 클라가 표시축 결정)
+        await self.send_spectators({
+            "type": "judge",
+            "seq": self.judge_seq,
+            "atMs": at_ms,
+            "momentumAgent": self.momentum_agent,
+            "event": event,
+        })
         if db.pool:  # 관전 리플레이·판정 시비 대응 기록 (P1 테이블)
             await db.pool.execute(
                 "INSERT INTO judge_events (room_id, seq, at_ms, payload) VALUES ($1,$2,$3,$4)",
@@ -447,6 +496,7 @@ async def room_ws(ws: WebSocket, room_id: str, token: str):
                     utt = {
                         "type": "utterance",
                         "from": user_id,
+                        "role": room.players[user_id]["role"],  # 관전자용 (당사자는 from 사용)
                         "text": msg["text"],
                         "tStartMs": msg.get("tStartMs", room.t_ms()),
                     }
@@ -467,3 +517,42 @@ async def room_ws(ws: WebSocket, room_id: str, token: str):
     except WebSocketDisconnect:
         room.sockets.pop(user_id, None)
         # TODO(P1): 15초 재접속 유예 → AI 이어받기/판 무효 (IA F3)
+
+
+@router.get("/battles/live/latest")
+async def latest_live_battle():
+    """가장 최근 통화 중(in_call) 배틀 방 — 관전용(데모 프로젝터). 비밀 제외."""
+    live = [r for r in rooms.values() if r.state == "in_call"]
+    if not live:
+        return {"roomId": None}
+    room = max(live, key=lambda r: r.started_at or 0)
+    return {
+        "roomId": room.id,
+        "players": {
+            p["role"]: {"nickname": p["nickname"], "formFactor": p["form_factor"]}
+            for p in room.players.values()
+        },
+    }
+
+
+@router.websocket("/ws/watch/{room_id}")
+async def watch_ws(ws: WebSocket, room_id: str, token: str):
+    """읽기 전용 관전 — 비밀 목표·규칙 카드는 절대 전송하지 않는다(규칙 #2)."""
+    if user_id_from_token(token) is None:
+        await ws.close(code=4401)
+        return
+    room = rooms.get(room_id)
+    if room is None:
+        await ws.close(code=4404)
+        return
+    await ws.accept()
+    room.spectators.append(ws)
+    try:
+        await ws.send_text(json.dumps(room.spectator_snapshot(), ensure_ascii=False))
+        while True:
+            await ws.receive_text()  # 관전자 입력은 무시 (연결 유지용)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if ws in room.spectators:
+            room.spectators.remove(ws)
