@@ -251,7 +251,11 @@ class _BossIntroScreenState extends State<BossIntroScreen>
     );
   }
 
-  Widget _avatar(IntroStory story, {required double size, required double fontSize}) {
+  Widget _avatar(IntroStory story, {required double size, required double fontSize}) =>
+      _avatarFor(story.friendName, size: size, fontSize: fontSize);
+
+  /// 이름 첫 글자 아바타 — 발신자별(친구·교수님 등) 구분에 사용.
+  Widget _avatarFor(String name, {required double size, required double fontSize}) {
     return Container(
       width: size,
       height: size,
@@ -266,7 +270,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
         ),
       ),
       alignment: Alignment.center,
-      child: Text(story.friendInitial,
+      child: Text(name.isEmpty ? '?' : name.characters.first,
           style: TextStyle(
               fontFamily: YbsType.display,
               fontSize: fontSize,
@@ -375,7 +379,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
               child: _photoPlaceholder(m, mine: true),
             ));
       case IntroMessageKind.friend:
-        return _friendRow(story, m.time,
+        return _friendRow(story, m.time, senderName: m.senderName,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -393,7 +397,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
                       fontSize: 14.5, height: 1.5, color: YbsColor.textBody)),
             ));
       case IntroMessageKind.friendPhoto:
-        return _friendRow(story, m.time,
+        return _friendRow(story, m.time, senderName: m.senderName,
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
@@ -481,11 +485,13 @@ class _BossIntroScreenState extends State<BossIntroScreen>
     );
   }
 
-  Widget _friendRow(IntroStory story, String time, {required Widget child}) {
+  Widget _friendRow(IntroStory story, String time,
+      {required Widget child, String? senderName}) {
+    final name = senderName ?? story.friendName;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _avatar(story, size: 30, fontSize: 12),
+        _avatarFor(name, size: 30, fontSize: 12),
         const SizedBox(width: 8),
         // avatar+시간 라벨이 차지하는 폭을 뺀 나머지에만 맞도록 Flexible로
         // 감싸지 않으면, 말풍선+시간 텍스트 합이 남은 폭을 미세하게 넘길 때
@@ -494,7 +500,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(story.friendName,
+              Text(name,
                   style: const TextStyle(
                       fontSize: 11, color: YbsColor.textFaint)),
               const SizedBox(height: 4),
@@ -529,6 +535,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
         Container(
           width: 200,
           height: 140,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.black.withValues(alpha: 0.4)),
@@ -540,20 +547,22 @@ class _BossIntroScreenState extends State<BossIntroScreen>
                   : const [Color(0xFF1B2634), Color(0xFF141B26), Color(0xFF0F141D)],
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_outlined,
-                  size: 26,
-                  color: mine
-                      ? const Color(0xFF9AA6B8)
-                      : YbsColor.sky400.withValues(alpha: 0.7)),
-              const SizedBox(height: 8),
-              Text(m.caption,
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF9AA6B8))),
-            ],
-          ),
+          child: m.imageAsset != null
+              ? Image.asset(m.imageAsset!, fit: BoxFit.cover)
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.image_outlined,
+                        size: 26,
+                        color: mine
+                            ? const Color(0xFF9AA6B8)
+                            : YbsColor.sky400.withValues(alpha: 0.7)),
+                    const SizedBox(height: 8),
+                    Text(m.caption,
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF9AA6B8))),
+                  ],
+                ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 5, 8, 3),
@@ -637,12 +646,13 @@ class _BossIntroScreenState extends State<BossIntroScreen>
 
   // ================================================================ 발신 카드
   Widget _incomingDivider() {
+    final incoming = _story?.incoming ?? false;
     return Row(
       children: [
         const Expanded(child: Divider(color: YbsColor.borderStrong, height: 1)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('INCOMING BOSS',
+          child: Text(incoming ? 'INCOMING CALL' : 'OUTGOING CALL',
               style: TextStyle(
                   fontFamily: YbsType.numeric,
                   fontSize: 10,
@@ -656,6 +666,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
   }
 
   Widget _callCard(IntroStory story) {
+    final incoming = story.incoming;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
       decoration: BoxDecoration(
@@ -677,23 +688,23 @@ class _BossIntroScreenState extends State<BossIntroScreen>
       ),
       child: Column(
         children: [
-          Text(story.callCardTitle,
+          Text(incoming ? '전화가 왔어요' : story.callCardTitle,
               style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: YbsColor.textSub)),
           const SizedBox(height: 12),
-          Text(story.phoneNumber,
-              style: const TextStyle(
-                  fontFamily: YbsType.numeric,
-                  fontSize: 32,
+          Text(incoming ? story.callCardTitle : story.phoneNumber,
+              style: TextStyle(
+                  fontFamily: incoming ? YbsType.display : YbsType.numeric,
+                  fontSize: incoming ? 26 : 32,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
+                  letterSpacing: incoming ? 0 : 1.2,
                   height: 1.1,
                   color: YbsColor.textHero)),
           const SizedBox(height: 12),
-          const Text('상담 가능 시간 · 지금',
-              style: TextStyle(fontSize: 12, color: YbsColor.textFaint)),
+          Text(incoming ? '지금 수신 중…' : '상담 가능 시간 · 지금',
+              style: const TextStyle(fontSize: 12, color: YbsColor.textFaint)),
           const SizedBox(height: 14),
           AnimatedBuilder(
             animation: _loop,
@@ -721,13 +732,13 @@ class _BossIntroScreenState extends State<BossIntroScreen>
                   color: YbsColor.go500,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.call, size: 21, color: YbsColor.textOnGo),
-                    SizedBox(width: 10),
-                    Text('고객센터에 전화하기',
-                        style: TextStyle(
+                    const Icon(Icons.call, size: 21, color: YbsColor.textOnGo),
+                    const SizedBox(width: 10),
+                    Text(incoming ? '전화 받기' : '전화 걸기',
+                        style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
                             color: YbsColor.textOnGo)),

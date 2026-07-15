@@ -74,8 +74,10 @@ class IntroMessage {
   const IntroMessage({
     required this.kind,
     this.text = '',
-    this.caption = '', // 사진 메시지 설명
+    this.caption = '', // 사진 메시지 설명(플레이스홀더용)
     this.file = '', // 사진 파일명 표기
+    this.imageAsset, // 실제 이미지 에셋 경로 (예: 'assets/pictures/bamti.png')
+    this.senderName, // friend 메시지의 발신자명 override (예: '교수님'). null이면 스토리 friendName
     required this.time,
   });
 
@@ -83,6 +85,8 @@ class IntroMessage {
   final String text;
   final String caption;
   final String file;
+  final String? imageAsset;
+  final String? senderName;
   final String time; // '오후 7:41'
 }
 

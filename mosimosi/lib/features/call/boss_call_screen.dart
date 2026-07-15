@@ -76,9 +76,11 @@ class _BossCallScreenState extends State<BossCallScreen> {
 
   void _onSession() {
     final s = _session!;
-    // 신호음(ringback): 연결 대기 동안만. 보스가 말하기 시작(_speaking)하거나
-    // 통화가 시작(active 이후)되면 즉시 멈춘다 — 발화와 겹치지 않게.
-    final ringing = !s.speaking &&
+    // 신호음(ringback): 내가 거는 통화(outgoing)의 연결 대기 동안만. 걸려오는
+    // 통화(incoming)는 이미 받은 상태라 신호음 없음. 보스가 말하기 시작(_speaking)하면
+    // 즉시 멈춘다 — 발화와 겹치지 않게.
+    final isIncoming = _boss?.introStory?.incoming ?? false;
+    final ringing = !isIncoming && !s.speaking &&
         (s.phase == CallPhase.connecting || s.phase == CallPhase.ringing);
     if (ringing) {
       SoundService.instance.startRingback();

@@ -244,7 +244,7 @@ class BossCardUi extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 fontFamily: YbsType.display,
-                                fontSize: 17,
+                                fontSize: 20,
                                 height: 1.2,
                                 color: locked ? YbsColor.textFaint : YbsColor.textHero)),
                         const SizedBox(height: 3),

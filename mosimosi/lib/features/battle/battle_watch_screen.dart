@@ -269,14 +269,15 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
                 ),
                 _secretBox(isAgent: isAgent),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(YbsSpace.s4),
-                    child: recent.isEmpty
-                        ? const Center(
-                            child: Text('발화 대기 중…',
-                                style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint)))
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                  child: recent.isEmpty
+                      ? const Center(
+                          child: Text('발화 대기 중…',
+                              style: TextStyle(fontSize: YbsType.sub, color: YbsColor.textFaint)))
+                      // 하단 정렬 + 발화가 폰 높이를 넘치면 위로 스크롤 (인콜 자막과 동일).
+                      : SingleChildScrollView(
+                          reverse: true,
+                          padding: const EdgeInsets.all(YbsSpace.s4),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               for (var i = 0; i < recent.length; i++)
@@ -292,7 +293,7 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
                                 ),
                             ],
                           ),
-                  ),
+                        ),
                 ),
                 Container(
                   width: double.infinity,

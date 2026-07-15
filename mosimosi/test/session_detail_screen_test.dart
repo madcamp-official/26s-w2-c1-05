@@ -46,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 헤더 제목 + 트랜스크립트의 보스 발화자 이름 둘 다에 나타나는 게 정상.
-    expect(find.text('무던한 치킨집 사장님'), findsWidgets);
+    expect(find.text('치킨집 사장님'), findsWidgets);
     expect(find.text('91점'), findsOneWidget);
     expect(find.textContaining('환불'), findsNothing);
     expect(tester.takeException(), isNull);

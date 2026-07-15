@@ -21,18 +21,14 @@ class _BossListScreenState extends State<BossListScreen> {
   /// null = 로딩 중/연결 실패 (미도전과 구분 — 캡션 '…' 표시).
   Map<String, BossProgress>? _progress;
 
-  // 비주얼 데이터 (실보스 매핑: 1→chicken, 2→dental, 3→alba, 4→prof_grade,
-  // 5→prof_gradschool, 8→refund).
-  // 실보스의 격파·캡션은 progress에서 계산, 스텁(6~7)은 고정 문구.
+  // 실보스 6종 (1→chicken … 6→refund). 격파·캡션은 progress에서 계산.
   static const _entries = [
-    _Entry(1, 'chicken', '무던한 치킨집 사장님', '주문 폭주에도 흔들림 없는 자', BossTierUi.normal, 1, false, ''),
-    _Entry(2, 'dental', '따발총 치과 접수원', '3초에 한 문장, 숨 쉴 틈 없음', BossTierUi.normal, 2, false, ''),
-    _Entry(3, 'alba', '미루기 달인 알바 사장님', '오늘도 다음에 얘기하자는 사장', BossTierUi.rare, 3, false, ''),
-    _Entry(4, 'prof_grade', '출석부 든 교수님', '성적엔 이유가 있다는 자', BossTierUi.rare, 4, false, ''),
-    _Entry(5, 'prof_gradschool', '칭찬으로 붙잡는 교수님', 'ㅎㅎ로 거절을 막아서는 자', BossTierUi.boss, 4, false, ''),
-    _Entry(6, null, '', '', BossTierUi.rare, 4, true, '해금: No.005 격파 · 소문: 서류를 세 번 요구한다'),
-    _Entry(7, null, '', '', BossTierUi.boss, 4, true, '해금: No.006 격파 · 소문: 조항을 전부 외우고 있다'),
-    _Entry(8, 'refund', '환불 불가 3연벙 상담원', '최종 보스 · 환불은 안 됩니다', BossTierUi.legend, 5, false, ''),
+    _Entry(1, 'chicken', '야식은 치킨이지', '주문 폭주에도 흔들림 없는 자', BossTierUi.normal, 1, false, ''),
+    _Entry(2, 'dental', '아야야 이가 아파요', '3초에 한 문장, 숨 쉴 틈 없음', BossTierUi.normal, 2, false, ''),
+    _Entry(3, 'alba', '시급 협상 대작전!', '오늘도 다음에 얘기하자는 사장', BossTierUi.rare, 3, false, ''),
+    _Entry(4, 'prof_grade', '교수님, 학점이 이상해요!', '성적엔 이유가 있다는 자', BossTierUi.rare, 4, false, ''),
+    _Entry(5, 'prof_gradschool', '대학원생이 될 수는 없어', 'ㅎㅎ로 거절을 막아서는 자', BossTierUi.boss, 4, false, ''),
+    _Entry(6, 'refund', '아니 환불이 안 된다고?', '최종 보스 · 환불은 안 됩니다', BossTierUi.legend, 5, false, ''),
   ];
 
   @override
@@ -64,8 +60,7 @@ class _BossListScreenState extends State<BossListScreen> {
       _entries.where(_cleared).length;
 
   String _caption(_Entry e) {
-    if (e.id == null) return e.stubCaption; // 비주얼 스텁
-    final suffix = e.no == 8 ? ' · 최종 보스' : '';
+    final suffix = e.no == 6 ? ' · 최종 보스' : '';
     final progress = _progress;
     if (progress == null) return '…'; // 로딩/연결 실패
     final p = progress[e.id];
@@ -75,7 +70,7 @@ class _BossListScreenState extends State<BossListScreen> {
     return '도전 ${p.attempts}회 · 미격파$suffix';
   }
 
-  String get _clearedLabel => '격파 ${_progress == null ? '–' : _clearedCount}/8';
+  String get _clearedLabel => '격파 ${_progress == null ? '–' : _clearedCount}/6';
 
   @override
   Widget build(BuildContext context) {
@@ -89,11 +84,6 @@ class _BossListScreenState extends State<BossListScreen> {
               padding: EdgeInsets.fromLTRB(desktop ? 48 : YbsSpace.s5, desktop ? 40 : YbsSpace.s6, desktop ? 48 : YbsSpace.s5, 0),
               child: _header(desktop),
             ),
-            if (desktop)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(48, YbsSpace.s6, 48, 0),
-                child: _filterChips(),
-              ),
             Expanded(
               child: GridView.builder(
                 padding: EdgeInsets.all(desktop ? 48 : YbsSpace.s5).copyWith(top: YbsSpace.s4),
@@ -150,7 +140,7 @@ class _BossListScreenState extends State<BossListScreen> {
           ),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: _clearedCount / 8,
+            widthFactor: _clearedCount / 6,
             child: Container(
               decoration: BoxDecoration(
                 color: YbsColor.live500,
@@ -209,30 +199,6 @@ class _BossListScreenState extends State<BossListScreen> {
     );
   }
 
-  Widget _filterChips() {
-    Widget chip(String label, {bool active = false}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4, vertical: 7),
-          decoration: BoxDecoration(
-            color: active ? YbsColor.surfaceCardHover : Colors.transparent,
-            border: Border.all(color: active ? YbsColor.borderStrong : YbsColor.borderSoft),
-            borderRadius: BorderRadius.circular(YbsRadius.full),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                  color: active ? YbsColor.textHero : YbsColor.textSub)),
-        );
-    return Row(children: [
-      chip('전체', active: true),
-      const SizedBox(width: YbsSpace.s2),
-      chip('미격파'),
-      const SizedBox(width: YbsSpace.s2),
-      chip('격파'),
-      const SizedBox(width: YbsSpace.s2),
-      chip('전설'),
-    ]);
-  }
 }
 
 class _Entry {
