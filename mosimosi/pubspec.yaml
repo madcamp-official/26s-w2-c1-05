@@ -35,6 +35,7 @@ flutter:
   assets:
     - .env
     - assets/brand/
+    - assets/sounds/
   # 디자인 시스템 지정 폰트 (모두 SIL OFL): display/body/numeric
   fonts:
     - family: BlackHanSans

@@ -5,6 +5,7 @@ import '../../core/call/call_session.dart';
 import '../../core/call/llm_tasks.dart';
 import '../../core/call/session_store.dart';
 import '../../core/data/bosses.dart';
+import '../../core/sound_service.dart';
 import '../../services/game_server_client.dart';
 import '../../services/llm_factory.dart';
 import '../../services/player_records.dart';
@@ -29,6 +30,19 @@ class BossResultScreen extends StatefulWidget {
 class _BossResultScreenState extends State<BossResultScreen> {
   int _tab = 0; // 0 판정 / 1 리포트
 
+  @override
+  void initState() {
+    super.initState();
+    // 결과는 통화의 연장 — 로비로 돌아갈 때까지 BGM을 계속 음소거한다.
+    SoundService.instance.suppressBgm();
+  }
+
+  @override
+  void dispose() {
+    SoundService.instance.unsuppressBgm();
+    super.dispose();
+  }
+
   CallRecord? get _record => SessionStore.get(widget.sessionId);
 
   Future<JudgeResult> _judge(CallRecord record) {
@@ -39,6 +53,12 @@ class _BossResultScreenState extends State<BossResultScreen> {
       endReason: record.endReason,
     ).then((judge) {
       _reportEnd(record, judge); // fire-and-forget — 화면 지연 없음
+      // 판정 도착 시 성패음 1회 (judgeFuture 캐시라 재빌드에도 중복 없음).
+      if (judge.cleared) {
+        SoundService.instance.success();
+      } else {
+        SoundService.instance.failure();
+      }
       return judge;
     });
   }

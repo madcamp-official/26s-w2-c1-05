@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/local_store.dart';
+import '../../core/sound_service.dart';
 import '../../platform/stt_engine.dart';
 import '../../platform/stt_factory.dart';
 import '../../ui/breakpoints.dart';
@@ -54,6 +55,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
   @override
   void initState() {
     super.initState();
+    SoundService.instance.suppressBgm(); // 배틀 통화 중 로비 BGM 음소거
     final room = BattleRoomController.of(widget.roomId);
     _room = room;
     if (room == null) return;
@@ -120,6 +122,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     }
     if (room.ended && !_navigated) {
       _navigated = true; // judging 진입 즉시 결과 화면 (스피너 → verdict)
+      SoundService.instance.hangup(); // 결과 대기 화면으로 넘어가는 찰칵
       if (mounted) context.go('/battle/${widget.roomId}/result');
       return;
     }
@@ -136,6 +139,7 @@ class _BattleCallScreenState extends State<BattleCallScreen> {
     _stt?.stop();
     _room?.removeListener(_onRoom);
     _fallbackController.dispose();
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

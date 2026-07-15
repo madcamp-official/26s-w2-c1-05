@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/sound_service.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 import 'battle_watch_controller.dart';
@@ -24,6 +25,7 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
   @override
   void initState() {
     super.initState();
+    SoundService.instance.suppressBgm(); // 관전 중 로비 BGM 음소거
     _watch.connect();
   }
 
@@ -35,6 +37,7 @@ class _BattleWatchScreenState extends State<BattleWatchScreen> {
   void dispose() {
     _watch.removeListener(_onUpdate);
     _watch.dispose();
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

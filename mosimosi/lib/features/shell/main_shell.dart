@@ -1,19 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/sound_service.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/theme.dart';
 
 /// GNB 셸 (IA §4 + 디자인 3a): 홈 / 도감 / 배틀 / 전적 4개 목적지.
 /// 모바일 = 하단 탭바, 데스크톱 = 좌측 사이드 레일 (IA 미해결 #1 → 레일 선택).
 /// 통화·배틀 매칭·설정·스파이크는 셸 밖 풀스크린 라우트.
-class MainShell extends StatelessWidget {
+/// 로비 BGM은 여기서 시작 — 통화·배틀 등 몰입 화면이 suppressBgm으로 음소거한다.
+class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
-  void _go(int index) =>
-      shell.goBranch(index, initialLocation: index == shell.currentIndex);
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  @override
+  void initState() {
+    super.initState();
+    SoundService.instance.startBgm();
+  }
+
+  void _go(int index) => widget.shell
+      .goBranch(index, initialLocation: index == widget.shell.currentIndex);
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +37,7 @@ class MainShell extends StatelessWidget {
             NavigationRail(
               backgroundColor: YbsColor.ink900,
               indicatorColor: YbsColor.go500.withValues(alpha: 0.15),
-              selectedIndex: shell.currentIndex,
+              selectedIndex: widget.shell.currentIndex,
               onDestinationSelected: _go,
               labelType: NavigationRailLabelType.all,
               selectedLabelTextStyle:
@@ -51,17 +64,17 @@ class MainShell extends StatelessWidget {
               ],
             ),
             const VerticalDivider(width: 1, color: YbsColor.borderSoft),
-            Expanded(child: shell),
+            Expanded(child: widget.shell),
           ],
         ),
       );
     }
     return Scaffold(
-      body: shell,
+      body: widget.shell,
       bottomNavigationBar: NavigationBar(
         backgroundColor: YbsColor.ink900,
         indicatorColor: YbsColor.go500.withValues(alpha: 0.15),
-        selectedIndex: shell.currentIndex,
+        selectedIndex: widget.shell.currentIndex,
         onDestinationSelected: _go,
         destinations: const [
           NavigationDestination(

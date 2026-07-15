@@ -9,6 +9,7 @@ import '../../core/call/session_store.dart';
 import '../../core/data/bosses.dart';
 import '../../core/local_store.dart';
 import '../../core/models/boss.dart';
+import '../../core/sound_service.dart';
 import '../../platform/stt_factory.dart';
 import '../../platform/tts_factory.dart';
 import '../../services/game_server_client.dart';
@@ -46,6 +47,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
   @override
   void initState() {
     super.initState();
+    SoundService.instance.suppressBgm(); // 통화 중 로비 BGM 음소거
     final boss = _boss;
     if (boss == null) return;
     final llm = createLlmClient();
@@ -74,8 +76,19 @@ class _BossCallScreenState extends State<BossCallScreen> {
 
   void _onSession() {
     final s = _session!;
+    // 신호음(ringback): 연결 대기 동안만. 보스가 말하기 시작(_speaking)하거나
+    // 통화가 시작(active 이후)되면 즉시 멈춘다 — 발화와 겹치지 않게.
+    final ringing = !s.speaking &&
+        (s.phase == CallPhase.connecting || s.phase == CallPhase.ringing);
+    if (ringing) {
+      SoundService.instance.startRingback();
+    } else {
+      SoundService.instance.stopRingback();
+    }
     if (s.phase == CallPhase.ended && !_navigated) {
       _navigated = true;
+      SoundService.instance.stopRingback();
+      SoundService.instance.hangup(); // 결과 대기 화면으로 넘어가는 찰칵
       final spoken = s.transcript.where((u) => u.text.isNotEmpty).toList();
       if (spoken.isEmpty) {
         // 연결 중 취소 등 대화 없는 종료 — 심판할 게 없으니 브리핑으로.
@@ -113,6 +126,8 @@ class _BossCallScreenState extends State<BossCallScreen> {
     _session?.removeListener(_onSession);
     _session?.dispose();
     _fallbackController.dispose();
+    SoundService.instance.stopRingback();
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

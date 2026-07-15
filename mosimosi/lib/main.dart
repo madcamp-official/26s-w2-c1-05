@@ -6,6 +6,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import 'core/local_store.dart';
 import 'core/router.dart';
+import 'core/sound_service.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
@@ -20,6 +21,7 @@ Future<void> main() async {
     // .env 없거나 로드 실패 시 데스크톱 Whisper 미설정 → 폴백 UI로 동작.
   }
   await LocalStore.init();
+  SoundService.instance.init(); // 효과음·BGM 엔진 프리로드 (실패해도 무해)
   // 로그인 토큰 + 닉네임까지 있어야 온보딩 통과 (닉네임 미설정 = 온보딩 중단분).
   final store = LocalStore.instance;
   final router = buildRouter(

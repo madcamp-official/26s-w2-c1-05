@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/data/bosses.dart';
 import '../../core/models/boss.dart';
+import '../../core/sound_service.dart';
 import '../../ui/breakpoints.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
@@ -45,6 +46,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
   @override
   void initState() {
     super.initState();
+    SoundService.instance.suppressBgm(); // 인트로 스토리 동안 로비 BGM 음소거
     final story = _story;
     if (story == null) {
       // 스토리 없는 보스 — 인트로 없이 바로 통화로.
@@ -76,6 +78,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
             _typing = false;
             _visible++;
           });
+          SoundService.instance.chat(); // 상대(친구) 메시지 도착음
           _scheduleNext(story);
         });
       });
@@ -94,6 +97,7 @@ class _BossIntroScreenState extends State<BossIntroScreen>
   void dispose() {
     _timer?.cancel();
     _loop.dispose();
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

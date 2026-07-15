@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../core/local_store.dart';
+import '../../core/sound_service.dart';
 import '../../services/game_server_client.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
@@ -38,6 +39,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
   @override
   void initState() {
     super.initState();
+    SoundService.instance.suppressBgm(); // 매칭~배틀 동안 로비 BGM 음소거
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -94,6 +96,7 @@ class _BattleMatchingScreenState extends State<BattleMatchingScreen> {
   void dispose() {
     _timer?.cancel();
     _matchSocket?.sink.close(); // 큐 이탈 (서버가 disconnect로 제거)
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

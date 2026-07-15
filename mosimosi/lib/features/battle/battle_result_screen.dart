@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/sound_service.dart';
 import '../../ui/components.dart';
 import '../../ui/theme.dart';
 import 'battle_room.dart';
@@ -20,21 +21,40 @@ class BattleResultScreen extends StatefulWidget {
 class _BattleResultScreenState extends State<BattleResultScreen> {
   BattleRoomController? _room;
   int _tab = 0;
+  bool _resultSoundPlayed = false;
 
   @override
   void initState() {
     super.initState();
+    // 결과는 배틀의 연장 — 로비로 돌아갈 때까지 BGM을 계속 음소거한다.
+    SoundService.instance.suppressBgm();
     _room = BattleRoomController.of(widget.roomId);
     _room?.addListener(_onRoom);
+    _maybePlayResultSound(); // verdict가 이미 도착해 있으면 즉시
   }
 
   void _onRoom() {
+    _maybePlayResultSound();
     if (mounted) setState(() {});
+  }
+
+  /// verdict 도착 시 승/패 효과음 1회 (무승부는 무음).
+  void _maybePlayResultSound() {
+    if (_resultSoundPlayed || _room?.verdict == null) return;
+    _resultSoundPlayed = true;
+    final winnerId = _verdict['winnerUserId'] as String?;
+    if (winnerId == null) return; // 무승부
+    if (winnerId == _myId) {
+      SoundService.instance.success();
+    } else {
+      SoundService.instance.failure();
+    }
   }
 
   @override
   void dispose() {
     _room?.removeListener(_onRoom);
+    SoundService.instance.unsuppressBgm();
     super.dispose();
   }
 

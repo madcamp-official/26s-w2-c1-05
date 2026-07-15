@@ -96,6 +96,7 @@ class IntroStory {
     required this.messages,
     required this.callCardTitle, // '급배송 고객센터'
     required this.phoneNumber, // '1588-0424'
+    this.incoming = false, // true = 걸려오는 상황(상대가 전화), false = 거는 상황
   });
 
   final String friendName;
@@ -104,6 +105,7 @@ class IntroStory {
   final List<IntroMessage> messages;
   final String callCardTitle;
   final String phoneNumber;
+  final bool incoming;
 
   String get friendInitial => friendName.substring(0, 1);
 }

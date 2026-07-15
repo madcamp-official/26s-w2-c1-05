@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/sound_service.dart';
 import 'theme.dart';
 
 /// 여보세요 공유 위젯 — 디자인 시스템 컴포넌트(JSX)의 Flutter 이식.
@@ -94,7 +95,12 @@ class YbsButton extends StatelessWidget {
       YbsButtonSize.lg => (56.0, 28.0, 18.0),
     };
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap == null
+          ? null
+          : () {
+              SoundService.instance.click();
+              onTap!();
+            },
       child: Container(
         height: height,
         width: fullWidth ? double.infinity : null,
