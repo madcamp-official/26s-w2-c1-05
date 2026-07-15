@@ -75,6 +75,7 @@ class _BossResultScreenState extends State<BossResultScreen> {
           CallEndReason.hangUp => 'hang_up',
           CallEndReason.timeOut => 'time_out',
           CallEndReason.silenceOverflow => 'silence',
+          CallEndReason.bossHangUp => 'boss_hang_up',
         },
         'result': judge.cleared ? 'win' : 'lose',
         'score': judge.score,
@@ -386,6 +387,7 @@ class _BossResultScreenState extends State<BossResultScreen> {
         CallEndReason.hangUp => '통화 종료',
         CallEndReason.timeOut => '시간 초과',
         CallEndReason.silenceOverflow => '침묵 누적',
+        CallEndReason.bossHangUp => '상대가 종료',
       };
 
   // ---- CTA: 재도전 / 다음 보스 / 도감 ----

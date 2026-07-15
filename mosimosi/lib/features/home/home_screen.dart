@@ -310,6 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 width: 44,
                 height: 44,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: YbsColor.surfaceInset,
                   gradient: RadialGradient(
@@ -321,8 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
                 ),
                 alignment: Alignment.center,
-                child: Text(boss.portraitSyllable,
-                    style: const TextStyle(fontFamily: YbsType.display, fontSize: 19, height: 1, color: YbsColor.sky400)),
+                child: bossPortraitImage(boss.portraitImage,
+                    fallback: Text(boss.portraitSyllable,
+                        style: const TextStyle(fontFamily: YbsType.display, fontSize: 19, height: 1, color: YbsColor.sky400))),
               ),
               const SizedBox(width: YbsSpace.s3),
               Expanded(
@@ -570,6 +572,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   width: 48,
                   height: 48,
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: YbsColor.surfaceInset,
                     gradient: RadialGradient(
@@ -581,8 +584,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(YbsRadius.sm + 2),
                   ),
                   alignment: Alignment.center,
-                  child: Text(boss.portraitSyllable,
-                      style: const TextStyle(fontFamily: YbsType.display, fontSize: 21, height: 1, color: YbsColor.sky400)),
+                  child: bossPortraitImage(boss.portraitImage,
+                      fallback: Text(boss.portraitSyllable,
+                          style: const TextStyle(fontFamily: YbsType.display, fontSize: 21, height: 1, color: YbsColor.sky400))),
                 ),
                 const SizedBox(width: YbsSpace.s3),
                 Expanded(

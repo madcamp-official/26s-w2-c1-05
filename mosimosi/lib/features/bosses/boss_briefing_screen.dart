@@ -207,6 +207,7 @@ class BossBriefingScreen extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: YbsColor.surfaceInset,
@@ -215,8 +216,9 @@ class BossBriefingScreen extends StatelessWidget {
         boxShadow: [BoxShadow(color: tierColor.withValues(alpha: 0.35), blurRadius: 28)],
       ),
       alignment: Alignment.center,
-      child: Text(boss.portraitSyllable,
-          style: TextStyle(fontFamily: YbsType.display, fontSize: syllableSize, height: 1, color: tierColor)),
+      child: bossPortraitImage(boss.portraitImage,
+          fallback: Text(boss.portraitSyllable,
+              style: TextStyle(fontFamily: YbsType.display, fontSize: syllableSize, height: 1, color: tierColor))),
     );
   }
 

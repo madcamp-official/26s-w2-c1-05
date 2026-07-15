@@ -258,6 +258,7 @@ class _BossCallScreenState extends State<BossCallScreen> {
           Container(
             width: 68,
             height: 68,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: YbsColor.surfaceInset,
@@ -270,8 +271,9 @@ class _BossCallScreenState extends State<BossCallScreen> {
               boxShadow: [BoxShadow(color: YbsColor.live500.withValues(alpha: 0.22), blurRadius: 24)],
             ),
             alignment: Alignment.center,
-            child: Text(boss.portraitSyllable,
-                style: const TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live400)),
+            child: bossPortraitImage(boss.portraitImage,
+                fallback: Text(boss.portraitSyllable,
+                    style: const TextStyle(fontFamily: YbsType.display, fontSize: 30, height: 1, color: YbsColor.live400))),
           ),
           const SizedBox(height: YbsSpace.s2),
           Text(boss.name,

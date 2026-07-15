@@ -18,7 +18,7 @@ import '../models/boss.dart';
 
 enum CallPhase { connecting, ringing, active, silenceWarning, last30s, ended }
 
-enum CallEndReason { hangUp, timeOut, silenceOverflow }
+enum CallEndReason { hangUp, timeOut, silenceOverflow, bossHangUp }
 
 /// 발화 기록 — 규칙 #3: tStartMs = 통화 시작(active 진입) 기준 상대 시각.
 class Utterance {
@@ -101,9 +101,11 @@ class CallSessionController extends ChangeNotifier {
   final List<({String text, String? emotion})> _ttsQueue = [];
   String _systemPrompt = '';
 
-  // ---- 감정 태그 파싱 (턴별) — LLM 응답 맨 앞 [감정]을 떼어 TTS로 전달 ----
+  // ---- 감정 태그 파싱 (턴별) — LLM 응답 맨 앞 [감정](+[끝])을 떼어 처리 ----
   static const _emotions = {'평온', '상냥', '짜증', '분노', '미안', '당황'};
+  static const _endTags = {'끝', '통화종료', 'END'}; // 보스가 통화를 마무리하는 신호
   String? _turnEmotion; // 이번 보스 응답의 감정 (null = 미지정)
+  bool _bossHangUpPending = false; // 이번 응답에 [끝] — 발성 완료 후 보스가 끊음
   String _tagBuf = ''; // 태그 파싱 전 선행 버퍼
   bool _tagResolved = false;
 
@@ -198,6 +200,13 @@ class CallSessionController extends ChangeNotifier {
     if (openMic) {
       if (!r.isFinal) {
         interim = r.text;
+        // 발화 진행 중(내 차례에 부분 인식이 들어오는 동안)에는 침묵 타이머를
+        // 리셋한다 — 안 그러면 0.8초도 안 쉬고 길게 말할 때 서버가 아직 최종
+        // 분절을 안 끊어 '침묵 경고'가 오발생할 수 있다(interim은 여기서만 옴).
+        if (r.text.trim().isNotEmpty && _started && !_replying && !_speaking) {
+          _idleSince = null;
+          _silence = false;
+        }
         notifyListeners();
         return;
       }
@@ -206,6 +215,11 @@ class CallSessionController extends ChangeNotifier {
       // 응답 생성·보스 발화 중 도착분은 무시 — 반이중: 마이크는 뮤트돼 있지만
       // 뮤트 직전 캡처가 뒤늦게 전사돼 도착할 수 있어 이중 방어.
       if (text.isEmpty || !_started || _replying || _speaking) {
+        // 내 차례인데 빈 인식으로 끝났으면(위 interim에서 _idleSince를 리셋했을 수
+        // 있음) 침묵 타이머를 다시 걸어 침묵 추적이 꺼진 채 남지 않게 한다.
+        if (_started && !_replying && !_speaking && _idleSince == null) {
+          _idleSince = DateTime.now();
+        }
         notifyListeners();
         return;
       }
@@ -250,6 +264,7 @@ class CallSessionController extends ChangeNotifier {
     _replying = true;
     _pendingTts = '';
     _turnEmotion = null;
+    _bossHangUpPending = false;
     _tagBuf = '';
     _tagResolved = false;
     notifyListeners();
@@ -280,43 +295,71 @@ class CallSessionController extends ChangeNotifier {
     } finally {
       _replying = false;
       notifyListeners();
+      // 보스가 [끝]을 붙였으면 — 이 대사의 TTS가 다 재생된 뒤 보스가 먼저 끊는다.
+      if (_bossHangUpPending && !_ended) unawaited(_endAfterTtsDrained());
     }
+  }
+
+  /// 보스의 마지막 대사가 완전히 재생된 뒤 통화를 종료한다(보스가 먼저 끊음).
+  Future<void> _endAfterTtsDrained() async {
+    while (!_ended && (_speaking || _ttsQueue.isNotEmpty)) {
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+    if (!_ended) _end(CallEndReason.bossHangUp);
   }
 
   /// 히스토리 최근 8발화 유지 (개발 규약 6~8턴).
   List<LlmMessage> _buildMessages(String? seedUser) {
     final spoken = transcript.where((u) => u.text.isNotEmpty).toList();
     final recent = spoken.length > 8 ? spoken.sublist(spoken.length - 8) : spoken;
-    return [
+    final msgs = <LlmMessage>[
       LlmMessage(role: 'system', content: _systemPrompt),
       if (seedUser != null) LlmMessage(role: 'user', content: seedUser),
       for (final u in recent)
         LlmMessage(role: u.speaker == 'user' ? 'user' : 'assistant', content: u.text),
     ];
+    // 최근접(recency) 역할 앵커 — 맨 앞 시스템 프롬프트는 턴이 쌓이면 주목도가
+    // 떨어져 역할이 흐려진다(상대 대사를 대신 말하거나 호칭이 뒤바뀜). 모델이
+    // 가장 최근에 보는 위치(마지막 유저 턴 끝)에 역할을 재확인시켜 드리프트를 막는다.
+    // 전사(transcript)엔 남기지 않고 이 요청에만 덧붙인다.
+    final anchor = "(지금 너는 '${boss.name}' 역할이다. ${boss.name}로서 한두 문장만 말하고, "
+        "절대 상대의 말을 대신 이어 말하거나 상대를 '${boss.name}'이라고 부르지 마라.)";
+    final last = msgs.last;
+    if (last.role == 'user') {
+      msgs[msgs.length - 1] = LlmMessage(role: 'user', content: '${last.content}\n\n$anchor');
+    } else {
+      msgs.add(LlmMessage(role: 'user', content: anchor));
+    }
+    return msgs;
   }
 
-  /// 스트림 선두의 `[감정]` 태그를 소비하고, 태그를 뗀 실제 대사만 반환한다.
-  /// 태그가 완성되기 전(닫는 `]` 미도착)엔 빈 문자열을 반환해 버퍼링한다.
+  /// 스트림 선두의 `[감정]`(+`[끝]`) 태그들을 소비하고, 태그를 뗀 실제 대사만
+  /// 반환한다. 선두 태그라 TTS로 새어나가지 않는다. 태그가 완성되기 전(닫는 `]`
+  /// 미도착)엔 빈 문자열을 반환해 버퍼링한다. [끝] 태그는 통화 종료 신호로 처리.
   String _consumeEmotionTag(String delta) {
     if (_tagResolved) return delta;
     _tagBuf += delta;
-    final trimmed = _tagBuf.trimLeft();
-    if (trimmed.isEmpty) return ''; // 아직 공백만 도착
-    if (!trimmed.startsWith('[')) {
-      _tagResolved = true; // 태그 없음 — 그대로 통과
-      final out = _tagBuf;
-      _tagBuf = '';
-      return out;
+    // 선두의 [ … ] 태그를 연달아 소비한다 — [감정] 뒤에 [끝]이 이어질 수 있다.
+    while (true) {
+      final trimmed = _tagBuf.trimLeft();
+      if (trimmed.isEmpty) return ''; // 아직 공백만 — 더 기다림
+      if (!trimmed.startsWith('[')) {
+        _tagResolved = true; // 더 이상 태그 없음 — 나머지 통과
+        final out = _tagBuf;
+        _tagBuf = '';
+        return out;
+      }
+      final close = _tagBuf.indexOf(']');
+      if (close < 0) return ''; // 닫는 대괄호 대기
+      final open = _tagBuf.indexOf('[');
+      final tag = _tagBuf.substring(open + 1, close).trim();
+      if (_emotions.contains(tag)) {
+        _turnEmotion = tag;
+      } else if (_endTags.contains(tag)) {
+        _bossHangUpPending = true;
+      }
+      _tagBuf = _tagBuf.substring(close + 1); // 이 태그 소비 후 다음 태그 확인
     }
-    final close = _tagBuf.indexOf(']');
-    if (close < 0) return ''; // 태그 닫힘 대기
-    final open = _tagBuf.indexOf('[');
-    final tag = _tagBuf.substring(open + 1, close).trim();
-    if (_emotions.contains(tag)) _turnEmotion = tag;
-    _tagResolved = true;
-    final out = _tagBuf.substring(close + 1);
-    _tagBuf = '';
-    return out;
   }
 
   // ================================================================ TTS 큐
@@ -350,7 +393,8 @@ class CallSessionController extends ChangeNotifier {
         if (!_speaking && !_ended) stt.setMuted(false);
       });
     }
-    if (!_replying && !_ended) _idleSince = DateTime.now(); // 이제 내 차례
+    // 보스가 곧 끊을 예정이면 유저 차례를 열지 않는다 (_endAfterTtsDrained가 종료).
+    if (!_replying && !_ended && !_bossHangUpPending) _idleSince = DateTime.now();
     notifyListeners();
   }
 

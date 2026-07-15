@@ -108,6 +108,7 @@ class _BossListScreenState extends State<BossListScreen> {
                           difficulty: e.difficulty,
                           locked: e.locked,
                           cleared: _cleared(e),
+                          imageAsset: 'assets/bossimg/boss${e.no}.png',
                           onTap: e.id == null ? null : () => context.go('/bosses/${e.id}'),
                         ),
                       ),

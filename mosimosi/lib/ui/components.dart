@@ -9,6 +9,17 @@ import 'theme.dart';
 /// 통화(라이브 레지스터) 컴포넌트는 incall 토큰, 나머지는 게임 기본 토큰 사용.
 /// 애니메이션(펄스/스탬프/링)은 스코프 밖 → 정지 상태 시각만 반영.
 
+/// 보스 프로필 이미지(assets/bossimg/*.png)를 초상 컨테이너에 채운다.
+/// 컨테이너의 border/gradient/glow는 프레임으로 남고 이미지가 안을 cover로 채운다
+/// (Container에 clipBehavior: Clip.antiAlias 필요). 로드 실패 시 [fallback]로.
+Widget bossPortraitImage(String asset, {required Widget fallback}) => Image.asset(
+      asset,
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Center(child: fallback),
+    );
+
 // ─────────────────────────────────────────────────────────── Badge
 enum BadgeTone { live, go, gold, caution, neutral }
 
@@ -173,6 +184,7 @@ class BossCardUi extends StatelessWidget {
     this.locked = false,
     this.cleared = false,
     this.onTap,
+    this.imageAsset,
   });
 
   final int number;
@@ -183,6 +195,7 @@ class BossCardUi extends StatelessWidget {
   final bool locked;
   final bool cleared;
   final VoidCallback? onTap;
+  final String? imageAsset; // 보스 프로필 이미지 — null이면 글자 초상
 
   (String, Color, Color) get _tier => switch (tier) {
         BossTierUi.normal => ('일반', YbsColor.ink300, YbsColor.ink300.withValues(alpha: 0.16)),
@@ -218,6 +231,7 @@ class BossCardUi extends StatelessWidget {
                   // 초상 영역 (height = width * 0.72)
                   Container(
                     height: w * 0.72,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: YbsColor.surfaceInset,
                       gradient: locked
@@ -231,8 +245,12 @@ class BossCardUi extends StatelessWidget {
                     alignment: Alignment.center,
                     child: locked
                         ? const Icon(Icons.lock, size: 30, color: YbsColor.ink500)
-                        : Text(syllable!,
-                            style: TextStyle(fontFamily: YbsType.display, fontSize: w * 0.34, height: 1, color: tierColor)),
+                        : imageAsset != null
+                            ? bossPortraitImage(imageAsset!,
+                                fallback: Text(syllable!,
+                                    style: TextStyle(fontFamily: YbsType.display, fontSize: w * 0.34, height: 1, color: tierColor)))
+                            : Text(syllable!,
+                                style: TextStyle(fontFamily: YbsType.display, fontSize: w * 0.34, height: 1, color: tierColor)),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(YbsSpace.s3, YbsSpace.s2 + 2, YbsSpace.s3, YbsSpace.s3),

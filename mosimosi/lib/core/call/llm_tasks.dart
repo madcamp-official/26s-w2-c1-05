@@ -152,6 +152,7 @@ Future<JudgeResult> runFinalJudge({
     CallEndReason.hangUp => '플레이어가 통화를 종료함',
     CallEndReason.timeOut => '제한 시간 초과',
     CallEndReason.silenceOverflow => '침묵 누적으로 보스 인내심 소진',
+    CallEndReason.bossHangUp => '상대가 용건을 마무리하고 통화를 끊음',
   };
 
   final prompt = '''
