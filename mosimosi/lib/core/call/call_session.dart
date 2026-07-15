@@ -98,8 +98,14 @@ class CallSessionController extends ChangeNotifier {
   DateTime? _pttPressedAt;
   bool _awaitingFinal = false;
   String _pendingTts = '';
-  final List<String> _ttsQueue = [];
+  final List<({String text, String? emotion})> _ttsQueue = [];
   String _systemPrompt = '';
+
+  // ---- 감정 태그 파싱 (턴별) — LLM 응답 맨 앞 [감정]을 떼어 TTS로 전달 ----
+  static const _emotions = {'평온', '상냥', '짜증', '분노', '미안', '당황'};
+  String? _turnEmotion; // 이번 보스 응답의 감정 (null = 미지정)
+  String _tagBuf = ''; // 태그 파싱 전 선행 버퍼
+  bool _tagResolved = false;
 
   final _events = StreamController<CallEvent>.broadcast();
   Stream<CallEvent> get events => _events.stream;
@@ -243,6 +249,9 @@ class CallSessionController extends ChangeNotifier {
   Future<void> _bossReply({String? seedUser}) async {
     _replying = true;
     _pendingTts = '';
+    _turnEmotion = null;
+    _tagBuf = '';
+    _tagResolved = false;
     notifyListeners();
 
     final tStart = elapsedMs;
@@ -251,10 +260,13 @@ class CallSessionController extends ChangeNotifier {
     try {
       await for (final delta in llm.chatStream(_buildMessages(seedUser))) {
         if (_ended) return;
-        bossText += delta;
+        // 선행 [감정] 태그를 떼어낸 실제 대사만 자막·TTS로 흘린다.
+        final clean = _consumeEmotionTag(delta);
+        if (clean.isEmpty) continue;
+        bossText += clean;
         transcript[transcript.length - 1] =
             Utterance(speaker: 'boss', text: bossText, tStartMs: tStart);
-        _feedTts(delta);
+        _feedTts(clean);
         notifyListeners();
       }
       final rest = _pendingTts.trim();
@@ -283,6 +295,30 @@ class CallSessionController extends ChangeNotifier {
     ];
   }
 
+  /// 스트림 선두의 `[감정]` 태그를 소비하고, 태그를 뗀 실제 대사만 반환한다.
+  /// 태그가 완성되기 전(닫는 `]` 미도착)엔 빈 문자열을 반환해 버퍼링한다.
+  String _consumeEmotionTag(String delta) {
+    if (_tagResolved) return delta;
+    _tagBuf += delta;
+    final trimmed = _tagBuf.trimLeft();
+    if (trimmed.isEmpty) return ''; // 아직 공백만 도착
+    if (!trimmed.startsWith('[')) {
+      _tagResolved = true; // 태그 없음 — 그대로 통과
+      final out = _tagBuf;
+      _tagBuf = '';
+      return out;
+    }
+    final close = _tagBuf.indexOf(']');
+    if (close < 0) return ''; // 태그 닫힘 대기
+    final open = _tagBuf.indexOf('[');
+    final tag = _tagBuf.substring(open + 1, close).trim();
+    if (_emotions.contains(tag)) _turnEmotion = tag;
+    _tagResolved = true;
+    final out = _tagBuf.substring(close + 1);
+    _tagBuf = '';
+    return out;
+  }
+
   // ================================================================ TTS 큐
   void _feedTts(String delta) {
     _pendingTts += delta;
@@ -296,14 +332,16 @@ class CallSessionController extends ChangeNotifier {
   }
 
   Future<void> _enqueueTts(String sentence) async {
-    _ttsQueue.add(sentence);
+    // 문장마다 현재 턴 감정을 캡처해 큐가 다음 턴으로 넘어가도 섞이지 않게 한다.
+    _ttsQueue.add((text: sentence, emotion: _turnEmotion));
     if (_speaking) return;
     _speaking = true;
     if (!_started) _activate(); // 첫 발성 = 통화 시작 (active)
     if (openMic && sttAvailable) stt.setMuted(true); // 반이중 — 에코 되먹임 차단
     notifyListeners();
     while (_ttsQueue.isNotEmpty && !_ended) {
-      await tts.speak(_ttsQueue.removeAt(0));
+      final item = _ttsQueue.removeAt(0);
+      await tts.speak(item.text, emotion: item.emotion);
     }
     _speaking = false;
     if (openMic && sttAvailable) {

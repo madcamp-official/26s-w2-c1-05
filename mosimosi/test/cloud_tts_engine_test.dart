@@ -13,7 +13,8 @@ class _FakeTtsEngine implements TtsEngine {
   bool stopped = false;
 
   @override
-  Future<void> speak(String text, {double pitch = 1.0, double rate = 0.5}) async {
+  Future<void> speak(String text,
+      {double pitch = 1.0, double rate = 0.5, String? emotion}) async {
     spoken.add(text);
   }
 
