@@ -7,8 +7,8 @@ import '../../ui/components.dart';
 import '../../ui/theme.dart';
 
 /// 2.1 보스 도감 "전설의 진상 도감" — 디자인 E 섹션 이식.
-/// 모바일 2열 / 데스크톱 4열 + 필터 칩. 8종 중 실데이터는 시드 3종
-/// (No.001/002/008 → 탭 시 브리핑), 나머지는 비주얼 스텁.
+/// 모바일 2열 / 데스크톱 4열 + 필터 칩. 8종 중 실데이터는 시드 6종
+/// (No.001/002/003/004/005/008 → 탭 시 브리핑), 나머지는 비주얼 스텁.
 /// 격파·최고점은 GET /users/{id}/progress 실데이터 (Phase 2 §5).
 class BossListScreen extends StatefulWidget {
   const BossListScreen({super.key});
@@ -21,14 +21,15 @@ class _BossListScreenState extends State<BossListScreen> {
   /// null = 로딩 중/연결 실패 (미도전과 구분 — 캡션 '…' 표시).
   Map<String, BossProgress>? _progress;
 
-  // 비주얼 데이터 (실보스 매핑: 1→chicken, 2→dental, 8→refund).
-  // 실보스의 격파·캡션은 progress에서 계산, 스텁(3~7)은 고정 문구.
+  // 비주얼 데이터 (실보스 매핑: 1→chicken, 2→dental, 3→alba, 4→prof_grade,
+  // 5→prof_gradschool, 8→refund).
+  // 실보스의 격파·캡션은 progress에서 계산, 스텁(6~7)은 고정 문구.
   static const _entries = [
     _Entry(1, 'chicken', '무던한 치킨집 사장님', '주문 폭주에도 흔들림 없는 자', BossTierUi.normal, 1, false, ''),
     _Entry(2, 'dental', '따발총 치과 접수원', '3초에 한 문장, 숨 쉴 틈 없음', BossTierUi.normal, 2, false, ''),
-    _Entry(3, null, '단호한 미용실 원장', '예약장부의 절대 지배자', BossTierUi.normal, 2, false, '준비 중 · 곧 출현'),
-    _Entry(4, null, '말 끊는 김 과장', '문장을 끝까지 들어본 적 없는 자', BossTierUi.rare, 3, false, '준비 중 · 곧 출현'),
-    _Entry(5, null, '되묻는 보험 설계사', '', BossTierUi.rare, 3, true, '해금: No.004 격파 · 소문: 전화가 끝나지 않는다'),
+    _Entry(3, 'alba', '미루기 달인 알바 사장님', '오늘도 다음에 얘기하자는 사장', BossTierUi.rare, 3, false, ''),
+    _Entry(4, 'prof_grade', '출석부 든 교수님', '성적엔 이유가 있다는 자', BossTierUi.rare, 4, false, ''),
+    _Entry(5, 'prof_gradschool', '칭찬으로 붙잡는 교수님', 'ㅎㅎ로 거절을 막아서는 자', BossTierUi.boss, 4, false, ''),
     _Entry(6, null, '', '', BossTierUi.rare, 4, true, '해금: No.005 격파 · 소문: 서류를 세 번 요구한다'),
     _Entry(7, null, '', '', BossTierUi.boss, 4, true, '해금: No.006 격파 · 소문: 조항을 전부 외우고 있다'),
     _Entry(8, 'refund', '환불 불가 3연벙 상담원', '최종 보스 · 환불은 안 됩니다', BossTierUi.legend, 5, false, ''),

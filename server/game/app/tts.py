@@ -43,7 +43,20 @@ class TtsRequest(BaseModel):
     language_code: str = "ko-KR"
     pace: float | None = None  # speakingRate 0.25~2.0 (1.0=기본 속도)
     pitch: float | None = None  # semitone -20~20. Chirp3 HD 보이스면 무시됨
+    emotion: str | None = None  # 평온|상냥|짜증|분노|미안|당황 — Qwen instruction에만 반영
     ssml: bool = False
+
+
+# 감정 태그 → Qwen instruction 문구. 보스별 기본 instruction 뒤에 덧붙인다
+# (기본이 캐릭터 음색, 감정이 그 위의 순간 톤). Google 폴백 경로는 감정 미지원.
+_EMOTION_INSTRUCTION = {
+    "평온": "차분하고 평온한 어조로",
+    "상냥": "친절하고 상냥한 어조로",
+    "짜증": "짜증이 묻어나는 날카롭고 퉁명스러운 어조로",
+    "분노": "화가 나서 언성을 높인 격앙된 어조로",
+    "미안": "미안하고 난처해하는 조심스러운 어조로",
+    "당황": "당황해서 말이 살짝 흔들리는 어조로",
+}
 
 
 # ---- Qwen3-TTS (vLLM-Omni) 우선 경로 ----
@@ -69,6 +82,24 @@ _QWEN_VOICE_MAP = {
         "seed": 42,
         "instructions": "30대 한국 여성, 처음엔 억지로 차분한 척하다가 점점 짜증이 새어나오는, 감정이 억눌렸다 터지는 말투",
     },
+    "ko-KR-Chirp3-HD-Puck": {
+        "voice": "dylan",
+        "speed": 1.05,
+        "seed": 42,
+        "instructions": "30대 한국 남성, 곤란해하며 웃음 섞어 얼버무리는, 미안함과 능청스러움이 공존하는 말투",
+    },
+    "ko-KR-Chirp3-HD-Fenrir": {
+        "voice": "uncle_fu",
+        "speed": 0.95,
+        "seed": 42,
+        "instructions": "60대 한국 남성, 느긋하고 위엄 있게 뜸을 들이다가도 근거를 들으면 순간 진지해지는 말투",
+    },
+    "ko-KR-Chirp3-HD-Orus": {
+        "voice": "uncle_fu",
+        "speed": 1.05,
+        "seed": 42,
+        "instructions": "60대 한국 남성, 들뜨고 호의적인, 칭찬하며 붙잡으려는 다정한 말투",
+    },
 }
 
 
@@ -78,13 +109,17 @@ async def _synthesize_qwen(req: TtsRequest) -> bytes | None:
     cfg = _QWEN_VOICE_MAP.get(req.voice_name)
     if not base or req.ssml or cfg is None:
         return None
+    instructions = cfg["instructions"]
+    emo = _EMOTION_INSTRUCTION.get(req.emotion or "")
+    if emo:  # 캐릭터 기본 음색 + 이 순간의 감정
+        instructions = f"{instructions}. 지금은 {emo} 말한다"
     body = {
         "model": _QWEN_MODEL,
         "input": req.text,
         "voice": cfg["voice"],
         "speed": cfg["speed"],
         "seed": cfg["seed"],
-        "instructions": cfg["instructions"],
+        "instructions": instructions,
         "language": "Korean",
         # mp3(24kHz, MPEG-2 Layer III/LSF)는 일부 안드로이드 하드웨어 디코더
         # (예: 삼성 c2.sec.mp3.decoder)에서 디코딩이 멈추는 문제가 확인돼 wav로
