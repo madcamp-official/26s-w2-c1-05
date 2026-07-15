@@ -80,20 +80,82 @@
 
 ## 아키텍처
 
-```
-[Flutter 클라이언트 (Android / Windows)]
-  ├─ 음성 캡처(record) ──WebSocket──▶ [게임 서버 /ws/stt] ──WebSocket(localhost)──▶ [faster-whisper]
-  ├─ REST(JWT) ───────────────────▶ [게임 서버 FastAPI] ──▶ [PostgreSQL]
-  ├─ WebSocket /ws/match, /ws/room, /ws/watch ─▶ [게임 서버 — 매칭 큐 · 배틀 방 상태머신]
-  └─ TTS 요청 ─────────────────────▶ [게임 서버 /tts/synthesize] ──▶ [Qwen3-TTS(vLLM-Omni)] → 실패 시 [Google Cloud TTS] → 실패 시 클라 OS TTS
+```mermaid
+flowchart LR
+    subgraph Client["Flutter 클라이언트 (Android / Windows)"]
+        UIRouter["go_router + UI 컴포넌트"]
+        CallCtrl["CallSessionController / BattleRoomController"]
+        SttEngine["WhisperSttEngine (record 캡처)"]
+        TtsEngine["CloudTtsEngine → FlutterTtsEngine 폴백"]
+        LlmClient["ProxyLlmClient / FakeLlmClient"]
+        GsClient["GameServerClient (REST + WS 공용)"]
+        AuthSvc["AuthService (OAuth loopback)"]
+        UIRouter --> CallCtrl
+        CallCtrl --> SttEngine
+        CallCtrl --> TtsEngine
+        CallCtrl --> LlmClient
+        CallCtrl --> GsClient
+        UIRouter --> GsClient
+        UIRouter --> AuthSvc
+        AuthSvc --> GsClient
+    end
 
-[게임 서버 /llm/chat] ──task별 분기──▶ [vLLM(Qwen3-14B-AWQ)]  (boss_turn, incremental)
-                                  └─▶ [Gemini API]           (final_judge, scenario)
+    subgraph Server["FastAPI 게임 서버"]
+        Auth["auth.py — JWT 발급 + OAuth"]
+        Api["api.py — 유저 · 도감 · 전적"]
+        LlmProxy["llm.py — task별 vLLM/Gemini 분기"]
+        TtsProxy["tts.py — Qwen3-TTS/Google TTS 분기"]
+        SttRelay["stt.py — WS 릴레이"]
+        Matching["matching.py — 매칭 큐"]
+        Rooms["rooms.py — 배틀 방 상태머신 + 심판"]
+        Scenarios["scenarios.py — 시나리오 정의 + 규칙 판정"]
+        Db["db.py — asyncpg 풀"]
+        Matching --> Rooms
+        Rooms --> Scenarios
+        Rooms --> LlmProxy
+        Auth --> Db
+        Api --> Db
+        Rooms --> Db
+    end
 
-세 GPU 서비스(vLLM · Qwen3-TTS · faster-whisper)는 자체 GPU 서버(RTX 3090) 한 대에 상시 구동되며,
-게임 서버는 Cloudflare Tunnel로 외부에 공개된다. whisper 전용 워치독이 GPU 경합으로 인한
-CUDA 컨텍스트 손상을 감지해 자동 재시작한다.
+    subgraph Gpu["자체 GPU 서버 (RTX 3090)"]
+        Vllm["vLLM — Qwen3-14B-AWQ"]
+        QwenTts["Qwen3-TTS (vLLM-Omni)"]
+        Whisper["faster-whisper (localhost 전용)"]
+        Watchdog["whisper 워치독"]
+        Watchdog -. 감시·재시작 .-> Whisper
+    end
+
+    subgraph External["외부 서비스"]
+        Gemini["Google Gemini API"]
+        GcTts["Google Cloud TTS"]
+        OAuthProv["Google / Kakao OAuth"]
+    end
+
+    subgraph Data["저장소"]
+        Postgres[("PostgreSQL")]
+    end
+
+    AuthSvc <-->|"REST /auth/*"| Auth
+    GsClient <-->|"REST, JWT"| Api
+    LlmClient <-->|"REST + SSE /llm/chat"| LlmProxy
+    TtsEngine -->|"REST /tts/synthesize"| TtsProxy
+    GsClient <-->|"WS /ws/match, /ws/room, /ws/watch"| Matching
+    SttEngine <-->|"WS /ws/stt"| SttRelay
+
+    LlmProxy --> Vllm
+    LlmProxy --> Gemini
+    TtsProxy --> QwenTts
+    TtsProxy --> GcTts
+    SttRelay --> Whisper
+    Auth --> OAuthProv
+    Db --> Postgres
 ```
+
+게임 서버는 Cloudflare Tunnel로 `https://graceheeseo.madcamp-kaist.org`에 공개되며, vLLM·Qwen3-TTS·
+faster-whisper 세 GPU 서비스는 자체 GPU 서버 한 대(RTX 3090)를 나눠 쓴다. whisper는 GPU 메모리
+경합으로 CUDA 컨텍스트가 손상돼도 프로세스 자체는 죽지 않는 장애 패턴이 있어, 별도 워치독이
+주기적으로 실제 전사 경로를 태워보고 장애를 감지하면 자동 재시작한다(§8, FSD 참고).
 
 자세한 기능/화면 구조는 [docs/FSD.md](docs/FSD.md), [docs/IA.md](docs/IA.md) 참고.
 
