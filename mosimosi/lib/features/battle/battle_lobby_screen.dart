@@ -51,7 +51,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
   int get _wins => (_data?['wins'] as num?)?.toInt() ?? 0;
   int get _losses => (_data?['losses'] as num?)?.toInt() ?? 0;
   int get _streak => (_data?['streak'] as num?)?.toInt() ?? 0;
-  int get _elo => (_data?['elo'] as num?)?.toInt() ?? 1500;
 
   String get _seasonLine {
     final total = _wins + _losses;
@@ -63,13 +62,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
     final v = _data?[key] as num?;
     return v == null ? '—' : '${(v * 100).round()}%';
   }
-
-  /// elo 기반 간단 랭크 (디자인 RankBadge 대응 — 정식 시즌 티어는 P1).
-  (String, Color) get _rank => _elo >= 1600
-      ? ('GOLD', YbsColor.gold400)
-      : _elo >= 1450
-          ? ('SILVER', const Color(0xFFB8C4D6))
-          : ('BRONZE', const Color(0xFFC98A5A));
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +174,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
   // ================================================================ 프로필 카드
   Widget _profileCard() {
     final nickname = LocalStore.instance.nickname ?? '나';
-    final (rankLabel, rankColor) = _rank;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -244,21 +235,6 @@ class _BattleLobbyScreenState extends State<BattleLobbyScreen> {
                             fontSize: 12, color: YbsColor.textSub)),
                   ],
                 ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  border: Border.all(color: rankColor),
-                  borderRadius: BorderRadius.circular(YbsRadius.full),
-                ),
-                child: Text(rankLabel,
-                    style: TextStyle(
-                        fontFamily: YbsType.numeric,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: rankColor)),
               ),
             ],
           ),

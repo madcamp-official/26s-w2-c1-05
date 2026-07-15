@@ -20,7 +20,7 @@ router = APIRouter()
 @router.get("/users/{user_id}")
 async def get_user(user_id: uuid.UUID):
     pool = require_pool()
-    row = await pool.fetchrow("SELECT id, nickname, elo, created_at FROM users WHERE id=$1", user_id)
+    row = await pool.fetchrow("SELECT id, nickname, created_at FROM users WHERE id=$1", user_id)
     if row is None:
         raise HTTPException(404)
     return dict(row) | {"id": str(row["id"])}
@@ -38,7 +38,7 @@ async def get_progress(user_id: uuid.UUID = Depends(current_user)):
 # ---- 배틀 전적 (배틀 로비 탭, 디자인 3a) ----
 @router.get("/users/me/battles")
 async def my_battles(user_id: uuid.UUID = Depends(current_user)):
-    """최근 배틀 목록 + 집계(승패·연승·역할별 승률·elo). 종료된 방만."""
+    """최근 배틀 목록 + 집계(승패·연승·역할별 승률). 종료된 방만."""
     pool = require_pool()
     rows = await pool.fetch(
         """SELECT r.ended_at, r.winner_user_id, r.final_momentum,
@@ -49,7 +49,6 @@ async def my_battles(user_id: uuid.UUID = Depends(current_user)):
            JOIN users uo ON uo.id = op.user_id
            WHERE me.user_id = $1
            ORDER BY r.ended_at DESC LIMIT 50""", user_id)
-    elo_row = await pool.fetchrow("SELECT elo FROM users WHERE id=$1", user_id)
 
     recent = []
     wins = losses = draws = 0
@@ -88,7 +87,6 @@ async def my_battles(user_id: uuid.UUID = Depends(current_user)):
         return role_wins[role] / role_total[role] if role_total[role] else None
 
     return {
-        "elo": elo_row["elo"] if elo_row else 1500,
         "wins": wins,
         "losses": losses,
         "draws": draws,

@@ -235,7 +235,7 @@ async def local_login(body: LocalAuth):
 async def get_me(user_id: uuid.UUID = Depends(current_user)):
     pool = require_pool()
     row = await pool.fetchrow(
-        "SELECT id, nickname, email, provider, elo, created_at FROM users WHERE id=$1", user_id)
+        "SELECT id, nickname, email, provider, created_at FROM users WHERE id=$1", user_id)
     if row is None:
         raise HTTPException(404)
     return dict(row) | {"id": str(row["id"])}

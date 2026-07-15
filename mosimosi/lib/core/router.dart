@@ -13,7 +13,6 @@ import '../features/bosses/boss_result_screen.dart';
 import '../features/call/battle_call_screen.dart';
 import '../features/call/boss_call_screen.dart';
 import '../features/history/history_screen.dart';
-import '../features/history/ranking_screen.dart';
 import '../features/history/session_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -97,10 +96,6 @@ GoRouter buildRouter({required String initialLocation}) => GoRouter(
                     sessionId: state.pathParameters['sessionId']!),
               ),
             ],
-          ),
-          GoRoute(
-            path: '/ranking',
-            builder: (context, state) => const RankingScreen(),
           ),
         ]),
       ],

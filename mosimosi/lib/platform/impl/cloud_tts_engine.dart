@@ -61,7 +61,7 @@ class CloudTtsEngine implements TtsEngine {
         'voice_name': voicePreset.voiceName,
         'pace': voicePreset.pace,
         if (voicePreset.pitch != null) 'pitch': voicePreset.pitch,
-        if (emotion != null) 'emotion': emotion,
+        'emotion': ?emotion,
       }));
     final response = await http.Response.fromStream(
         await _httpClient.send(request).timeout(_timeout));

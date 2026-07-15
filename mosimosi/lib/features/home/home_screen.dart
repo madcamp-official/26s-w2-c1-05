@@ -120,28 +120,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return '$best';
   }
 
-  /// 연속 플레이 일수 — 오늘(또는 어제)부터 거꾸로 이어진 날 수.
-  int get _streak {
-    final sessions = _sessions;
-    if (sessions == null || sessions.isEmpty) return 0;
-    final days = {
-      for (final s in sessions)
-        DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day),
-    };
-    final today = DateTime.now();
-    var cursor = DateTime(today.year, today.month, today.day);
-    if (!days.contains(cursor)) {
-      cursor = cursor.subtract(const Duration(days: 1)); // 오늘 아직 안 했으면 어제부터
-      if (!days.contains(cursor)) return 0;
-    }
-    var streak = 0;
-    while (days.contains(cursor)) {
-      streak++;
-      cursor = cursor.subtract(const Duration(days: 1));
-    }
-    return streak;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,10 +143,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Text('여보세요',
                     style: TextStyle(fontFamily: YbsType.display, fontSize: YbsType.title, height: 1, color: YbsColor.white)),
                 Row(children: [
-                  if (_streak > 0) ...[
-                    StreakBadge(count: _streak, label: '일 연속'),
-                    const SizedBox(width: YbsSpace.s2),
-                  ],
                   // 설정 진입 (디자인 데스크톱 헤더의 아바타를 모바일에도 사용)
                   GestureDetector(
                     onTap: () => context.push('/settings'),
@@ -424,10 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const Text('여보세요',
                   style: TextStyle(fontFamily: YbsType.display, fontSize: 26, height: 1, color: YbsColor.white)),
               Row(children: [
-                if (_streak > 0) ...[
-                  StreakBadge(count: _streak, label: '일 연속'),
-                  const SizedBox(width: YbsSpace.s4 - 2),
-                ],
                 GestureDetector(
                   onTap: () => context.push('/settings'),
                   child: Row(children: [

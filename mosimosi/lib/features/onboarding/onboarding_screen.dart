@@ -396,7 +396,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ? '이미 ${store.nickname ?? '계정'}으로 로그인돼 있어요'
                         : _isSignup
                             ? '이메일과 비밀번호로 가입해요'
-                            : '전적·도감·랭킹을 어느 기기에서든 이어가요',
+                            : '전적·도감을 어느 기기에서든 이어가요',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         fontSize: 15, height: 1.6, color: YbsColor.textSub)),
@@ -463,7 +463,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         if (loggedIn)
           _footer(cta: '다음', onTap: _next)
         else
-          _footer(caption: '전적·도감·랭킹이 계정에 저장돼요'),
+          _footer(caption: '전적·도감이 계정에 저장돼요'),
       ],
     ));
   }
@@ -610,7 +610,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: YbsSpace.s2 + 2),
-                Text(_nicknameError ?? '배틀과 랭킹에서 쓸 이름이에요',
+                Text(_nicknameError ?? '배틀에서 쓸 이름이에요',
                     style: TextStyle(
                         fontSize: YbsType.micro,
                         color: _nicknameError == null ? YbsColor.go400 : YbsColor.live400)),

@@ -475,44 +475,6 @@ class RubricScore extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────── StreakBadge (feedback/StreakBadge.jsx)
-class StreakBadge extends StatelessWidget {
-  const StreakBadge({super.key, required this.count, this.label = '연승'});
-
-  final int count;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final hot = count >= 3;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: YbsSpace.s4 - 2, vertical: YbsSpace.s2),
-      decoration: BoxDecoration(
-        color: hot ? YbsColor.gold400.withValues(alpha: 0.12) : YbsColor.surfaceCard,
-        border: Border.all(color: hot ? YbsColor.gold500 : YbsColor.borderSoft),
-        borderRadius: BorderRadius.circular(YbsRadius.full),
-        boxShadow: hot ? [BoxShadow(color: YbsColor.goldGlow, blurRadius: 20)] : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.local_fire_department, size: 18, color: hot ? YbsColor.gold400 : YbsColor.textFaint),
-          const SizedBox(width: YbsSpace.s2),
-          Text('$count',
-              style: TextStyle(
-                  fontFamily: YbsType.numeric,
-                  fontSize: YbsType.bodyLg,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
-                  color: hot ? YbsColor.gold300 : YbsColor.textBody)),
-          const SizedBox(width: YbsSpace.s2),
-          Text(label, style: const TextStyle(fontSize: 13, color: YbsColor.textSub)),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────── HighlightCard (feedback/HighlightCard.jsx)
 class HighlightCard extends StatelessWidget {
   const HighlightCard({super.key, required this.quote, this.context_, this.score, this.bossName, this.date});

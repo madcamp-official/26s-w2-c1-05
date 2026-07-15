@@ -7,7 +7,7 @@ import '../../ui/breakpoints.dart';
 import '../../ui/theme.dart';
 import '../shell/main_shell.dart';
 
-/// 4. 내 전적 — 4.1 대시보드 요약 + 4.2 전적 목록 (+랭킹 진입).
+/// 4. 내 전적 — 4.1 대시보드 요약 + 4.2 전적 목록.
 /// GET /users/{id}/sessions 실데이터 (Phase 2 §5). 점수 추이·평균·승률·판수는
 /// 받은 목록에서 클라 계산. 군말/침묵 평균은 세션별 judge 파싱 필요 → P2.5.
 class HistoryScreen extends StatefulWidget {
@@ -83,14 +83,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              YbsHeader(
-                title: '내 전적',
-                trailing: TextButton.icon(
-                  onPressed: () => context.go('/ranking'),
-                  icon: const Icon(Icons.emoji_events_outlined, size: 18, color: YbsColor.gold400),
-                  label: const Text('랭킹', style: TextStyle(color: YbsColor.gold400)),
-                ),
-              ),
+              const YbsHeader(title: '내 전적'),
               Padding(
                 padding: EdgeInsets.all(desktop ? YbsLayout.screenPadDesktop : YbsSpace.s5),
                 child: Column(
