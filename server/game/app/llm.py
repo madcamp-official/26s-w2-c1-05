@@ -113,7 +113,11 @@ async def _stream_vllm(req: ChatRequest):
     body = {
         "model": os.getenv("VLLM_MODEL", ""),
         "messages": req.messages,
-        "temperature": req.temperature if req.temperature is not None else 0.9,
+        "temperature": req.temperature if req.temperature is not None else 0.7,
+        # top_p<1 로 뉴클리어스 절단, repetition_penalty 로 반복 억제 — 둘 다 안 주면
+        # vLLM 기본(top_p=1.0)이라 Qwen3-AWQ가 저확률 CJK 토큰으로 코드스위칭(중국어 섞임)함.
+        "top_p": 0.8,
+        "repetition_penalty": 1.05,
         "max_tokens": req.max_output_tokens or 256,
         "stream": True,
         # Qwen3: thinking 비활성 (안 끄면 <think>로 지연 폭증 — Gemini 때와 같은 함정)
